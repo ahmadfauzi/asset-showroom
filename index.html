@@ -6,14 +6,22 @@
     <meta name="robots" content="noindex" />
     <title>Asset Showroom</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+      html, body { margin: 0; height: 100%; background: #16161a; overflow: hidden; }
       canvas { display: block; width: 100%; height: 100%; }
       #no-webgl { display: none; color: #ddd; font: 16px system-ui, sans-serif; padding: 2rem; }
+      #loader {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        background: #16161a; color: #bbb; font: 14px system-ui, sans-serif;
+        transition: opacity 0.4s;
+      }
+      #loader.done { opacity: 0; pointer-events: none; }
+      @media (prefers-reduced-motion: reduce) { #loader { transition: none; } }
     </style>
   </head>
   <body>
     <p id="no-webgl">This page needs WebGL2, and your browser doesn't support it. Try the latest Chrome, Edge, Safari or Firefox.</p>
     <canvas id="scene"></canvas>
+    <div id="loader" role="status">Loading the room…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
