@@ -64,14 +64,16 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
     image.alt = '';
     image.draggable = false;
     const dot = element('span', 'dot');
-    button.append(image, element('span', 'label', texture.name), dot);
+    const ring = element('span', 'ring');
+    ring.hidden = true;
+    button.append(image, ring, element('span', 'label', texture.name), dot);
     button.addEventListener('click', () => onApply(texture));
     button.addEventListener('dragstart', (event) => {
       event.dataTransfer!.setData(DRAG_TYPE, texture.slug);
       event.dataTransfer!.effectAllowed = 'copy';
     });
     swatches.append(button);
-    return { texture, button, dot };
+    return { texture, button, image, dot, ring };
   });
 
   const chip = document.getElementById('chip')!;
@@ -120,6 +122,16 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
   render();
 
   return {
+    // Settles when each thumbnail has loaded or failed.
+    thumbnails: swatchButtons.map(({ image }) => image.decode()),
+    // A ring on the swatch while its texture loads. null hides it.
+    setProgress(slug: string, fraction: number | null) {
+      const swatch = swatchButtons.find(({ texture }) => texture.slug === slug);
+      if (!swatch) return;
+      swatch.ring.hidden = fraction === null;
+      swatch.button.setAttribute('aria-busy', String(fraction !== null));
+      if (fraction !== null) swatch.ring.style.setProperty('--progress', String(fraction));
+    },
     setSelected(slot: Slot | null) {
       selected = slot;
       // Jump to the first tab the slot accepts.
