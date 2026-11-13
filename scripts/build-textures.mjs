@@ -93,12 +93,13 @@ for (const { slug, maps } of jobs) {
     await writePng(color, join(tmp, 'color.png'));
     encode(join(tmp, 'color.png'), join(out, 'color.ktx2'), ['--encode', 'etc1s', '--assign_oetf', 'srgb']);
 
-    const normal = await raw(maps.normal, 3);
+    // Half the colour size keeps a full room inside the 15 MB budget. See PRD section 10.
+    const normal = await raw(maps.normal, 3, { width: color.info.width / 2, height: color.info.height / 2 });
     // three.js expects OpenGL-style normals (green up). Poliigon marks DirectX ones with "DX".
     if (/DX/.test(maps.normal)) for (let i = 1; i < normal.data.length; i += 3) normal.data[i] = 255 - normal.data[i];
     await writePng(normal, join(tmp, 'normal.png'));
     encode(join(tmp, 'normal.png'), join(out, 'normal.ktx2'), [
-      '--encode', 'uastc', '--uastc_quality', '2', '--zcmp', '19', '--assign_oetf', 'linear', '--normalize',
+      '--encode', 'uastc', '--uastc_quality', '2', '--uastc_rdo_l', '1.0', '--zcmp', '19', '--assign_oetf', 'linear', '--normalize',
     ]);
 
     // AO in red, roughness in green, metalness in blue, which is how three.js reads them.
