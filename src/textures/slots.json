@@ -1,0 +1,11 @@
+{
+  "floor": ["wood", "stone"],
+  "featureWall": ["stone", "wall"],
+  "walls": ["stone", "wall"],
+  "slatWall": ["wood"],
+  "upholstery": ["fabric"],
+  "accents": ["fabric"],
+  "bedding": ["fabric"],
+  "rugs": ["fabric"],
+  "woodwork": ["wood", "stone"]
+}
