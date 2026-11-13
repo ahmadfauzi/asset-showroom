@@ -6,6 +6,7 @@ import {
   MathUtils,
   MeshStandardMaterial,
   PerspectiveCamera,
+  Raycaster,
   RepeatWrapping,
   Scene,
   Texture,
@@ -17,12 +18,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import manifest from '@manifest';
-import { buildRoom, type Slot } from './room';
+import { buildRoom, SLOT_NAMES, type Slot } from './room';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const loader = document.getElementById('loader')!;
@@ -77,8 +79,7 @@ if (!gl) {
     },
     { passive: false },
   );
-  window.addEventListener('keydown', (event) => {
-    if (event.key.toLowerCase() !== 'r' || event.ctrlKey || event.metaKey || event.altKey) return;
+  const resetView = () => {
     // An update without damping drops any orbit momentum left from the last drag.
     controls.enableDamping = false;
     controls.update();
@@ -86,12 +87,60 @@ if (!gl) {
     controls.update();
     controls.enableDamping = true;
     distance = home.distanceTo(controls.target);
+  };
+
+  // Slots: hovering shows a tooltip, clicking selects the slot and outlines it (PRD 6.3).
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const outline = new OutlinePass(new Vector2(), scene, camera);
+  outline.visibleEdgeColor.set(accent);
+  outline.hiddenEdgeColor.set(accent).multiplyScalar(0.3);
+  outline.edgeStrength = 4;
+  outline.edgeThickness = 1;
+  const select = (slot: Slot | null) => {
+    outline.selectedObjects = slot ? group.children.filter((mesh) => mesh.userData.slot === slot) : [];
+  };
+
+  const current: Partial<Record<Slot, string>> = {};
+  const raycaster = new Raycaster();
+  const pointer = new Vector2();
+  const slotAt = (event: PointerEvent): Slot | null => {
+    pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.intersectObject(group)[0]?.object.userData.slot ?? null;
+  };
+
+  const tooltip = document.getElementById('tooltip')!;
+  const tooltipTitle = tooltip.firstElementChild!;
+  canvas.addEventListener('pointermove', (event) => {
+    const slot = event.buttons ? null : slotAt(event);
+    canvas.style.cursor = slot ? 'pointer' : '';
+    tooltip.hidden = !slot;
+    if (!slot) return;
+    tooltipTitle.textContent = `${SLOT_NAMES[slot]} · ${current[slot] ?? 'No texture'}`;
+    const x = Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8);
+    const y = Math.min(event.clientY + 14, window.innerHeight - tooltip.offsetHeight - 8);
+    tooltip.style.transform = `translate(${x}px, ${y}px)`;
+  });
+  canvas.addEventListener('pointerleave', () => (tooltip.hidden = true));
+
+  // A click is a press and release less than 5 px apart, so orbit drags don't change the selection.
+  let pressedAt: [number, number] | null = null;
+  canvas.addEventListener('pointerdown', (event) => (pressedAt = [event.clientX, event.clientY]));
+  canvas.addEventListener('pointerup', (event) => {
+    if (pressedAt && Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) < 5) select(slotAt(event));
+    pressedAt = null;
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') select(null);
+    if (event.key.toLowerCase() === 'r' && !event.ctrlKey && !event.metaKey && !event.altKey) resetView();
   });
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   composer.addPass(new GTAOPass(scene, camera));
   composer.addPass(new UnrealBloomPass(new Vector2(), 0.2, 0.4, 0.9));
+  composer.addPass(outline);
   composer.addPass(new SMAAPass());
   composer.addPass(new OutputPass());
 
@@ -147,7 +196,13 @@ if (!gl) {
 
   const defaults = Object.entries(manifest.defaults).flatMap(([slot, slug]) => {
     const texture = manifest.textures.find((t) => t.slug === slug);
-    return texture && slot in materials ? [load(texture).then((maps) => apply(materials[slot as Slot], maps))] : [];
+    if (!texture || !(slot in materials)) return [];
+    return [
+      load(texture).then((maps) => {
+        apply(materials[slot as Slot], maps);
+        current[slot as Slot] = texture.name;
+      }),
+    ];
   });
   Promise.allSettled(defaults).then((results) => {
     for (const result of results) if (result.status === 'rejected') console.error(result.reason);

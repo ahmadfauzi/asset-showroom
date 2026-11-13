@@ -6,6 +6,7 @@
     <meta name="robots" content="noindex" />
     <title>Asset Showroom</title>
     <style>
+      :root { --accent: #5fb3ff; }
       html, body { margin: 0; height: 100%; background: #16161a; overflow: hidden; }
       canvas { display: block; width: 100%; height: 100%; }
       #no-webgl { display: none; color: #ddd; font: 16px system-ui, sans-serif; padding: 2rem; }
@@ -16,11 +17,19 @@
       }
       #loader.done { opacity: 0; pointer-events: none; }
       @media (prefers-reduced-motion: reduce) { #loader { transition: none; } }
+      #tooltip {
+        position: fixed; left: 0; top: 0; pointer-events: none; white-space: nowrap;
+        padding: 6px 10px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 0.08);
+        background: rgb(22 22 26 / 0.8); backdrop-filter: blur(8px);
+        color: #eee; font: 13px/1.4 system-ui, sans-serif;
+      }
+      #tooltip .hint { color: #999; font-size: 12px; }
     </style>
   </head>
   <body>
     <p id="no-webgl">This page needs WebGL2, and your browser doesn't support it. Try the latest Chrome, Edge, Safari or Firefox.</p>
     <canvas id="scene"></canvas>
+    <div id="tooltip" hidden><div></div><div class="hint">Click to change</div></div>
     <div id="loader" role="status">Loading the room…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
