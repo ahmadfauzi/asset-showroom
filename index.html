@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Asset Showroom</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #no-webgl { display: none; color: #ddd; font: 16px system-ui, sans-serif; padding: 2rem; }
+    </style>
+  </head>
+  <body>
+    <p id="no-webgl">This page needs WebGL2, and your browser doesn't support it. Try the latest Chrome, Edge, Safari or Firefox.</p>
+    <canvas id="scene"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
