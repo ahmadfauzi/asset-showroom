@@ -1,9 +1,11 @@
 import {
   ACESFilmicToneMapping,
+  Box3,
   Color,
   DirectionalLight,
   HemisphereLight,
   MathUtils,
+  Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
   Raycaster,
@@ -23,7 +25,8 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import manifest from '@manifest';
+import manifest, { type TextureInfo } from '@manifest';
+import { accepts, createHud, DRAG_TYPE } from './hud';
 import { buildRoom, SLOT_NAMES, type Slot } from './room';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -69,7 +72,8 @@ if (!gl) {
   controls.maxAzimuthAngle = Math.PI / 2 + 0.2;
 
   // OrbitControls zooms in steps, so the wheel sets a target distance and the loop eases towards it.
-  const ease = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.12;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ease = reducedMotion ? 1 : 0.12;
   let distance = home.distanceTo(controls.target);
   canvas.addEventListener(
     'wheel',
@@ -96,18 +100,26 @@ if (!gl) {
   outline.hiddenEdgeColor.set(accent).multiplyScalar(0.3);
   outline.edgeStrength = 4;
   outline.edgeThickness = 1;
-  const select = (slot: Slot | null) => {
-    outline.selectedObjects = slot ? group.children.filter((mesh) => mesh.userData.slot === slot) : [];
-  };
 
-  const current: Partial<Record<Slot, string>> = {};
+  let selected: Slot | null = null;
+  const current: Partial<Record<Slot, TextureInfo>> = {};
+  const select = (slot: Slot | null) => {
+    selected = slot;
+    outline.selectedObjects = slot ? group.children.filter((mesh) => mesh.userData.slot === slot) : [];
+    hud.setSelected(slot);
+  };
+  const hud = createHud(select, (texture) => {
+    if (selected && accepts(selected, texture.category)) applyTexture(selected, texture);
+  });
+
   const raycaster = new Raycaster();
   const pointer = new Vector2();
-  const slotAt = (event: PointerEvent): Slot | null => {
+  const hitAt = (event: MouseEvent) => {
     pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObject(group)[0]?.object.userData.slot ?? null;
+    return raycaster.intersectObject(group)[0];
   };
+  const slotAt = (event: MouseEvent): Slot | null => hitAt(event)?.object.userData.slot ?? null;
 
   const tooltip = document.getElementById('tooltip')!;
   const tooltipTitle = tooltip.firstElementChild!;
@@ -116,7 +128,7 @@ if (!gl) {
     canvas.style.cursor = slot ? 'pointer' : '';
     tooltip.hidden = !slot;
     if (!slot) return;
-    tooltipTitle.textContent = `${SLOT_NAMES[slot]} · ${current[slot] ?? 'No texture'}`;
+    tooltipTitle.textContent = `${SLOT_NAMES[slot]} · ${current[slot]?.name ?? 'No texture'}`;
     const x = Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8);
     const y = Math.min(event.clientY + 14, window.innerHeight - tooltip.offsetHeight - 8);
     tooltip.style.transform = `translate(${x}px, ${y}px)`;
@@ -129,6 +141,20 @@ if (!gl) {
   canvas.addEventListener('pointerup', (event) => {
     if (pressedAt && Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) < 5) select(slotAt(event));
     pressedAt = null;
+  });
+
+  // Dropping a swatch on a surface applies it there. A surface that doesn't accept the category ignores it.
+  canvas.addEventListener('dragover', (event) => {
+    if (event.dataTransfer?.types.includes(DRAG_TYPE)) event.preventDefault();
+  });
+  canvas.addEventListener('drop', (event) => {
+    event.preventDefault();
+    const texture = manifest.textures.find((t) => t.slug === event.dataTransfer?.getData(DRAG_TYPE));
+    const hit = hitAt(event);
+    const slot: Slot | undefined = hit?.object.userData.slot;
+    if (!texture || !hit || !slot || !accepts(slot, texture.category)) return;
+    select(slot);
+    applyTexture(slot, texture, hit.point);
   });
 
   window.addEventListener('keydown', (event) => {
@@ -157,20 +183,20 @@ if (!gl) {
   resize();
 
   renderer.setAnimationLoop(() => {
-    const current = camera.position.distanceTo(controls.target);
+    const now = camera.position.distanceTo(controls.target);
     camera.position
       .sub(controls.target)
-      .setLength(current + (distance - current) * ease)
+      .setLength(now + (distance - now) * ease)
       .add(controls.target);
     controls.update();
     composer.render();
   });
 
-  // Default room textures. The loader stays up until they are on screen (PRD 6.11).
+  // Textures
   const ktx2 = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(renderer);
   const anisotropy = renderer.capabilities.getMaxAnisotropy();
   const loaded = new Map<string, Promise<Texture[]>>();
-  const load = ({ slug, sizeCm }: (typeof manifest.textures)[number]) => {
+  const load = ({ slug, sizeCm }: TextureInfo) => {
     if (!loaded.has(slug)) {
       const maps = ['color', 'normal', 'orm'].map((map) => ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`));
       loaded.set(
@@ -194,15 +220,75 @@ if (!gl) {
     material.needsUpdate = true;
   };
 
+  // Draws the new maps over the slot inside a sphere that grows from the drop point for 0.6 s (PRD 6.3 step 3).
+  const spread = (slot: Slot, maps: Texture[], center: Vector3) =>
+    new Promise<void>((resolve) => {
+      const meshes = group.children.filter((mesh): mesh is Mesh => mesh.userData.slot === slot);
+      const bounds = new Box3();
+      for (const mesh of meshes) bounds.expandByObject(mesh);
+      const reach = new Vector3(
+        Math.max(center.x - bounds.min.x, bounds.max.x - center.x),
+        Math.max(center.y - bounds.min.y, bounds.max.y - center.y),
+        Math.max(center.z - bounds.min.z, bounds.max.z - center.z),
+      ).length();
+
+      const radius = { value: 0 };
+      const material = materials[slot].clone();
+      apply(material, maps);
+      Object.assign(material, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.spreadCenter = { value: center };
+        shader.uniforms.spreadRadius = radius;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying vec3 vSpreadPosition;')
+          .replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\nvSpreadPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            '#include <common>',
+            '#include <common>\nuniform vec3 spreadCenter;\nuniform float spreadRadius;\nvarying vec3 vSpreadPosition;',
+          )
+          .replace('void main() {', 'void main() {\n  if (distance(vSpreadPosition, spreadCenter) > spreadRadius) discard;');
+      };
+      const overlays = meshes.map((mesh) => {
+        const overlay = new Mesh(mesh.geometry, material);
+        overlay.receiveShadow = true;
+        overlay.raycast = () => {};
+        return overlay;
+      });
+      group.add(...overlays);
+
+      const start = performance.now();
+      const step = () => {
+        const t = Math.min((performance.now() - start) / 600, 1);
+        radius.value = reach * (1 - (1 - t) ** 3);
+        if (t < 1) return void requestAnimationFrame(step);
+        group.remove(...overlays);
+        material.dispose();
+        resolve();
+      };
+      requestAnimationFrame(step);
+    });
+
+  // The last texture picked for a slot wins, even if an earlier one finishes loading later.
+  const latest: Partial<Record<Slot, string>> = {};
+  const applyTexture = async (slot: Slot, texture: TextureInfo, dropPoint?: Vector3) => {
+    latest[slot] = texture.slug;
+    const maps = await load(texture);
+    if (latest[slot] !== texture.slug) return;
+    if (dropPoint && !reducedMotion) await spread(slot, maps, dropPoint);
+    if (latest[slot] !== texture.slug) return;
+    apply(materials[slot], maps);
+    current[slot] = texture;
+    hud.setTexture(slot, texture);
+  };
+
+  // Default room textures. The loader stays up until they are on screen (PRD 6.11).
   const defaults = Object.entries(manifest.defaults).flatMap(([slot, slug]) => {
     const texture = manifest.textures.find((t) => t.slug === slug);
-    if (!texture || !(slot in materials)) return [];
-    return [
-      load(texture).then((maps) => {
-        apply(materials[slot as Slot], maps);
-        current[slot as Slot] = texture.name;
-      }),
-    ];
+    return texture && slot in materials ? [applyTexture(slot as Slot, texture)] : [];
   });
   Promise.allSettled(defaults).then((results) => {
     for (const result of results) if (result.status === 'rejected') console.error(result.reason);
