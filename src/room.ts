@@ -4,6 +4,18 @@ import slots from './textures/slots.json';
 
 export type Slot = keyof typeof slots;
 
+export const SLOT_NAMES: Record<Slot, string> = {
+  floor: 'Floor',
+  featureWall: 'Feature wall',
+  walls: 'Walls',
+  slatWall: 'Slat wall',
+  upholstery: 'Upholstery',
+  accents: 'Accents',
+  bedding: 'Bedding',
+  rugs: 'Rugs',
+  woodwork: 'Woodwork',
+};
+
 // Shown until a slot has a texture.
 const PLACEHOLDER: Record<Slot, string> = {
   floor: '#b89b7a',
