@@ -56,7 +56,7 @@ Settled in the grilling session on 9 Oct 2026.
 | 9 | Branding | Neutral, no Poliigon branding |
 | 10 | Versions | v1 textures and light, v2 furniture and presets, v3 mood meter and cinematic camera |
 | 11 | Texture card | Name, category, real-world size, "View asset" link to poliigon.com |
-| 12 | Texture quality | 2K colour, normal, packed AO/roughness/metalness; KTX2; 256 px thumbnails |
+| 12 | Texture quality | 2K colour and packed AO/roughness/metalness, 1K normal (changed 13 Nov 2026 to fit the 15 MB budget); KTX2; 256 px thumbnails |
 | 13 | Asset sets | Free and premium sets, switched at build time |
 | 14 | Raw downloads | Local folder synced from a shared drive, gitignored; built locally |
 | 15 | Hosting | Public but unlisted (noindex) on a static host such as Cloudflare Pages |
@@ -245,7 +245,7 @@ Steps:
 2. Add its entry to the set's manifest.
 3. Run the build script for that set. It:
    - converts the colour map to KTX2 (ETC1S, sRGB);
-   - converts the normal map to KTX2 (UASTC, linear), flipping green if the source is DirectX style;
+   - scales the normal map to half size and converts it to KTX2 (UASTC with RDO 1.0, linear), flipping green if the source is DirectX style;
    - packs AO (red), roughness (green) and metalness (blue) into one KTX2 map (ETC1S, linear), which matches how three.js reads these maps;
    - writes a 256 px WebP thumbnail from the colour map.
 4. Commit the built files and the manifest.
