@@ -29,6 +29,23 @@
   <body>
     <p id="no-webgl">This page needs WebGL2, and your browser doesn't support it. Try the latest Chrome, Edge, Safari or Firefox.</p>
     <canvas id="scene"></canvas>
+    <h1 id="title">Asset Showroom</h1>
+    <aside id="slots" class="panel" aria-label="Surfaces">
+      <div id="slot-list"></div>
+      <section id="card" hidden>
+        <img alt="" width="56" height="56" />
+        <div>
+          <div class="name"></div>
+          <div class="meta"><span class="category"></span> · <span class="size"></span></div>
+          <a target="_blank" rel="noopener noreferrer">View asset</a>
+        </div>
+      </section>
+    </aside>
+    <section id="tray" class="panel" aria-label="Textures">
+      <div id="chip" class="panel"><span></span><button type="button" aria-label="Clear selection">×</button></div>
+      <div id="tabs" role="tablist"></div>
+      <div id="swatches"></div>
+    </section>
     <div id="tooltip" hidden><div></div><div class="hint">Click to change</div></div>
     <div id="loader" role="status">Loading the room…</div>
     <script type="module" src="/src/main.ts"></script>

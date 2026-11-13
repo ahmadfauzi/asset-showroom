@@ -17,7 +17,7 @@ export const SLOT_NAMES: Record<Slot, string> = {
 };
 
 // Shown until a slot has a texture.
-const PLACEHOLDER: Record<Slot, string> = {
+export const PLACEHOLDER: Record<Slot, string> = {
   floor: '#b89b7a',
   featureWall: '#c9c2b8',
   walls: '#e8e4de',
