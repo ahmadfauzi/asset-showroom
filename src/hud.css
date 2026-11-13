@@ -199,6 +199,31 @@ a:focus-visible {
   border-radius: 6px;
 }
 
+.swatch .ring {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.4);
+}
+
+.swatch .ring::before {
+  content: '';
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--progress, 0) * 1turn), rgb(255 255 255 / 0.2) 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+}
+
+.swatch .ring[hidden] {
+  display: none;
+}
+
 .swatch .label {
   display: block;
   overflow: hidden;

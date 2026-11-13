@@ -196,19 +196,36 @@ if (!gl) {
   const ktx2 = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(renderer);
   const anisotropy = renderer.capabilities.getMaxAnisotropy();
   const loaded = new Map<string, Promise<Texture[]>>();
+  const ready = new Set<string>();
+  const progress = new Map<string, number>();
+  const waiting = new Set<string>(); // slugs someone applied before they finished loading
   const load = ({ slug, sizeCm }: TextureInfo) => {
     if (!loaded.has(slug)) {
-      const maps = ['color', 'normal', 'orm'].map((map) => ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`));
+      const files = [0, 0, 0];
+      const maps = ['color', 'normal', 'orm'].map((map, i) =>
+        ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`, (event) => {
+          files[i] = event.total ? event.loaded / event.total : 0;
+          progress.set(slug, (files[0] + files[1] + files[2]) / 3);
+          if (waiting.has(slug)) hud.setProgress(slug, progress.get(slug)!);
+        }),
+      );
       loaded.set(
         slug,
-        Promise.all(maps).then((textures) => {
-          for (const texture of textures) {
-            texture.wrapS = texture.wrapT = RepeatWrapping;
-            texture.repeat.set(100 / sizeCm[0], 100 / sizeCm[1]);
-            texture.anisotropy = anisotropy;
-          }
-          return textures;
-        }),
+        Promise.all(maps)
+          .then((textures) => {
+            for (const texture of textures) {
+              texture.wrapS = texture.wrapT = RepeatWrapping;
+              texture.repeat.set(100 / sizeCm[0], 100 / sizeCm[1]);
+              texture.anisotropy = anisotropy;
+            }
+            ready.add(slug);
+            return textures;
+          })
+          .catch((error) => {
+            // Forget the failed load so the next pick tries again.
+            loaded.delete(slug);
+            throw error;
+          }),
       );
     }
     return loaded.get(slug)!;
@@ -276,7 +293,21 @@ if (!gl) {
   const latest: Partial<Record<Slot, string>> = {};
   const applyTexture = async (slot: Slot, texture: TextureInfo, dropPoint?: Vector3) => {
     latest[slot] = texture.slug;
-    const maps = await load(texture);
+    // A texture that isn't loaded yet shows a progress ring on its swatch until it is (PRD 6.11 step 4).
+    if (!ready.has(texture.slug)) {
+      waiting.add(texture.slug);
+      hud.setProgress(texture.slug, progress.get(texture.slug) ?? 0);
+    }
+    let maps: Texture[];
+    try {
+      maps = await load(texture);
+    } catch (error) {
+      console.error(error);
+      return;
+    } finally {
+      waiting.delete(texture.slug);
+      hud.setProgress(texture.slug, null);
+    }
     if (latest[slot] !== texture.slug) return;
     if (dropPoint && !reducedMotion) await spread(slot, maps, dropPoint);
     if (latest[slot] !== texture.slug) return;
@@ -285,13 +316,18 @@ if (!gl) {
     hud.setTexture(slot, texture);
   };
 
-  // Default room textures. The loader stays up until they are on screen (PRD 6.11).
+  // The loader stays up until the transcoder, the default room's textures and all thumbnails are in (PRD 6.11).
   const defaults = Object.entries(manifest.defaults).flatMap(([slot, slug]) => {
     const texture = manifest.textures.find((t) => t.slug === slug);
     return texture && slot in materials ? [applyTexture(slot as Slot, texture)] : [];
   });
-  Promise.allSettled(defaults).then((results) => {
-    for (const result of results) if (result.status === 'rejected') console.error(result.reason);
+  const tasks: Promise<unknown>[] = [ktx2.init(), ...defaults, ...hud.thumbnails];
+  let done = 0;
+  const tick = () => (loader.textContent = `Loading the room… ${Math.round((++done / tasks.length) * 100)}%`);
+  for (const task of tasks) task.then(tick, tick);
+  Promise.allSettled(tasks).then(async () => {
     requestAnimationFrame(() => loader.classList.add('done'));
+    // Then the rest of the set, one texture at a time, to leave bandwidth for a texture someone picks.
+    for (const texture of manifest.textures) await load(texture).catch(() => {});
   });
 }
