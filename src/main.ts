@@ -2,8 +2,6 @@ import {
   ACESFilmicToneMapping,
   Box3,
   Color,
-  DirectionalLight,
-  HemisphereLight,
   MathUtils,
   Mesh,
   MeshStandardMaterial,
@@ -26,6 +24,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import manifest, { type TextureInfo } from '@manifest';
+import { createDaylight } from './daylight';
 import { accepts, createHud, DRAG_TYPE } from './hud';
 import { buildRoom, SLOT_NAMES, type Slot } from './room';
 
@@ -44,18 +43,9 @@ if (!gl) {
 
   const scene = new Scene();
   scene.background = new Color('#16161a');
-  const { group, materials } = buildRoom();
+  const room = buildRoom();
+  const { group, materials } = room;
   scene.add(group);
-
-  scene.add(new HemisphereLight('#dde6f2', '#5a4f45', 1.2));
-  const sun = new DirectionalLight('#fff3e0', 3);
-  sun.position.set(6, 9, 7);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 });
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.02;
-  scene.add(sun);
 
   // Camera stays on the open front and right sides, above the plinth (PRD 6.6).
   const camera = new PerspectiveCamera(40, 1, 0.1, 100);
@@ -73,6 +63,7 @@ if (!gl) {
 
   // OrbitControls zooms in steps, so the wheel sets a target distance and the loop eases towards it.
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const daylight = createDaylight(scene, room, reducedMotion);
   const ease = reducedMotion ? 1 : 0.12;
   let distance = home.distanceTo(controls.target);
   canvas.addEventListener(
@@ -189,6 +180,7 @@ if (!gl) {
       .setLength(now + (distance - now) * ease)
       .add(controls.target);
     controls.update();
+    daylight.update();
     composer.render();
   });
 

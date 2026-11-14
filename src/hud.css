@@ -107,6 +107,46 @@ a:focus-visible {
   color: var(--accent);
 }
 
+#daylight {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  width: 200px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+#daylight .clock {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 28px;
+  text-align: center;
+}
+
+#daylight .presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 10px 0;
+}
+
+#daylight .presets button {
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #c8c8cc;
+  background: rgb(255 255 255 / 0.05);
+}
+
+#daylight .presets button[aria-pressed='true'] {
+  color: #fff;
+  border-color: var(--accent);
+}
+
+#daylight input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 #tray {
   position: fixed;
   bottom: 16px;
