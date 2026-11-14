@@ -31,6 +31,7 @@ export function createDaylight(
   scene: Scene,
   room: { glass: MeshStandardMaterial; shade: MeshStandardMaterial; lamps: Vector3[] },
   reducedMotion: boolean,
+  onUserChange: () => void,
 ) {
   const sky = new HemisphereLight(daySky, '#5a4f45', 1.2);
   const sun = new DirectionalLight(noonSun, 3);
@@ -53,7 +54,10 @@ export function createDaylight(
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label;
-    button.addEventListener('click', () => tweenTo(hours));
+    button.addEventListener('click', () => {
+      tweenTo(hours);
+      onUserChange();
+    });
     document.querySelector('#daylight .presets')!.append(button);
     return { button, hours };
   });
@@ -99,19 +103,23 @@ export function createDaylight(
     tween = { from: time, to: hours, start: performance.now() };
   }
 
+  // The slider moves the sun while it is dragged, and counts as one change when it is let go.
   slider.addEventListener('input', () => {
     tween = null;
     setTime(Number(slider.value));
   });
-  window.addEventListener('keydown', (event) => {
-    if ((event.key !== '[' && event.key !== ']') || event.ctrlKey || event.metaKey || event.altKey) return;
-    tween = null;
-    setTime(time + (event.key === ']' ? 1 : -1));
-  });
+  slider.addEventListener('change', onUserChange);
 
   setTime(DEFAULT_TIME);
 
   return {
+    // The time the room is at, or is moving to during a preset.
+    target: () => tween?.to ?? time,
+    // Sets the time at once and stops any preset that is running.
+    setTime(hours: number) {
+      tween = null;
+      setTime(hours);
+    },
     // Call once per frame.
     update() {
       if (!tween) return;

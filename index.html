@@ -41,6 +41,37 @@
         </div>
       </section>
     </aside>
+    <nav id="toolbar" class="panel" aria-label="Toolbar">
+      <button type="button" data-action="undo" aria-keyshortcuts="Control+Z Meta+Z" disabled>Undo</button>
+      <button type="button" data-action="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" disabled>Redo</button>
+      <button type="button" data-action="save">Save picture</button>
+      <button type="button" data-action="copy">Copy link</button>
+      <button type="button" data-action="help" aria-keyshortcuts="?">Help</button>
+    </nav>
+    <div id="toast" class="panel" role="status" aria-live="polite"></div>
+    <dialog id="help" aria-labelledby="help-title">
+      <h2 id="help-title">How the showroom works</h2>
+      <p>Try textures on the surfaces of a room and see how they look in different light.</p>
+      <h3>Apply a texture</h3>
+      <p>Pick a surface in the list on the left, or click it in the room. Then click a texture in the tray at the bottom. You can also drag a texture straight onto a surface.</p>
+      <h3>Change the light</h3>
+      <p>Use the presets or the slider on the right to change the time of day. The lamps come on after sunset.</p>
+      <h3>Move around</h3>
+      <p>Drag to turn the room and scroll to zoom.</p>
+      <h3>Share the room</h3>
+      <p>Copy link puts the room in the link. Anyone who opens it sees the same textures and time of day.</p>
+      <h3>Keys</h3>
+      <table>
+        <tr><td><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
+        <tr><td><kbd>Shift</kbd> + <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td><td>Redo</td></tr>
+        <tr><td><kbd>R</kbd></td><td>Reset the view</td></tr>
+        <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Move the time back or forward one hour</td></tr>
+        <tr><td><kbd>/</kbd></td><td>Hide or show the interface</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Open or close this help</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close this help, clear the selected surface</td></tr>
+      </table>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
     <section id="daylight" class="panel" aria-label="Daylight">
       <div class="clock">12:00</div>
       <div class="presets"></div>

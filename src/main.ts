@@ -25,8 +25,10 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import manifest, { type TextureInfo } from '@manifest';
 import { createDaylight } from './daylight';
-import { accepts, createHud, DRAG_TYPE } from './hud';
-import { buildRoom, SLOT_NAMES, type Slot } from './room';
+import { createHud, DRAG_TYPE } from './hud';
+import { accepts, buildRoom, SLOT_NAMES, type Slot } from './room';
+import { fromHash, toHash, type RoomState } from './state';
+import { createToolbar } from './toolbar';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const loader = document.getElementById('loader')!;
@@ -63,7 +65,7 @@ if (!gl) {
 
   // OrbitControls zooms in steps, so the wheel sets a target distance and the loop eases towards it.
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const daylight = createDaylight(scene, room, reducedMotion);
+  const daylight = createDaylight(scene, room, reducedMotion, () => commit());
   const ease = reducedMotion ? 1 : 0.12;
   let distance = home.distanceTo(controls.target);
   canvas.addEventListener(
@@ -100,7 +102,9 @@ if (!gl) {
     hud.setSelected(slot);
   };
   const hud = createHud(select, (texture) => {
-    if (selected && accepts(selected, texture.category)) applyTexture(selected, texture);
+    if (!selected || !accepts(selected, texture.category)) return;
+    applyTexture(selected, texture);
+    commit();
   });
 
   const raycaster = new Raycaster();
@@ -146,12 +150,102 @@ if (!gl) {
     if (!texture || !hit || !slot || !accepts(slot, texture.category)) return;
     select(slot);
     applyTexture(slot, texture, hit.point);
+    commit();
   });
 
-  window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') select(null);
-    if (event.key.toLowerCase() === 'r' && !event.ctrlKey && !event.metaKey && !event.altKey) resetView();
+  // Undo and redo (PRD 6.7). Each entry is the whole room: the texture picked for each slot and the time.
+  // The room is also kept in the URL hash, so the address is always a share link (PRD 6.8).
+  const snapshot = (): RoomState => ({ textures: { ...latest }, time: daylight.target() });
+  const past: RoomState[] = [];
+  let future: RoomState[] = [];
+  let committed: RoomState;
+  const save = () => {
+    history.replaceState(null, '', toHash(committed));
+    toolbar.setHistory(past.length > 0, future.length > 0);
+  };
+  const commit = () => {
+    const next = snapshot();
+    if (toHash(next) === toHash(committed)) return;
+    past.push(committed);
+    future = [];
+    committed = next;
+    save();
+  };
+  // ponytail: a slot can't go back to having no texture. A full manifest gives every slot a default.
+  const restore = (state: RoomState) => {
+    for (const [slot, slug] of Object.entries(state.textures) as [Slot, string][]) {
+      const texture = manifest.textures.find((t) => t.slug === slug);
+      if (texture && slug !== latest[slot]) applyTexture(slot, texture);
+    }
+    daylight.setTime(state.time);
+    committed = state;
+    save();
+  };
+  const undo = () => {
+    const previous = past.pop();
+    if (!previous) return;
+    future.push(committed);
+    restore(previous);
+  };
+  const redo = () => {
+    const next = future.pop();
+    if (!next) return;
+    past.push(committed);
+    restore(next);
+  };
+
+  // Saves the view without the HUD or the selection outline, at the canvas size (PRD 6.9).
+  const savePicture = () => {
+    const outlined = outline.selectedObjects;
+    outline.selectedObjects = [];
+    composer.render();
+    canvas.toBlob((blob) => {
+      if (!blob) return toolbar.toast("Couldn't save the picture.");
+      const link = document.createElement('a');
+      const date = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      link.download = `asset-showroom-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.png`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      toolbar.toast('Picture saved.');
+    }, 'image/png');
+    outline.selectedObjects = outlined;
+  };
+
+  const toolbar = createToolbar({
+    undo,
+    redo,
+    save: savePicture,
+    copy: () =>
+      navigator.clipboard.writeText(location.href).then(
+        () => toolbar.toast('Link copied. Anyone who opens it sees this room.'),
+        () => toolbar.toast("Couldn't copy the link. Copy it from the address bar instead."),
+      ),
   });
+
+  // Keys (PRD 6.10). Esc also closes the help dialog, which the browser does itself.
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') return select(null);
+    if (toolbar.help.open || event.altKey) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      return event.shiftKey ? redo() : undo();
+    }
+    if (event.ctrlKey || event.metaKey) return;
+    if (event.key === 'r' || event.key === 'R') resetView();
+    if (event.key === '[' || event.key === ']') {
+      daylight.setTime(daylight.target() + (event.key === ']' ? 1 : -1));
+      commit();
+    }
+    if (event.key === '/') {
+      event.preventDefault();
+      toolbar.toggleInterface();
+    }
+    if (event.key === '?') toolbar.toggleHelp();
+  });
+  // Editing the hash by hand loads that room.
+  window.addEventListener('hashchange', () => location.reload());
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
@@ -295,6 +389,13 @@ if (!gl) {
       maps = await load(texture);
     } catch (error) {
       console.error(error);
+      // Point the slot back at what it shows, so the link and history match the room.
+      if (latest[slot] === texture.slug) {
+        latest[slot] = current[slot]?.slug;
+        committed = snapshot();
+        save();
+      }
+      toolbar.toast(`Couldn't load ${texture.name}. Try again.`);
       return;
     } finally {
       waiting.delete(texture.slug);
@@ -308,17 +409,24 @@ if (!gl) {
     hud.setTexture(slot, texture);
   };
 
-  // The loader stays up until the transcoder, the default room's textures and all thumbnails are in (PRD 6.11).
-  const defaults = Object.entries(manifest.defaults).flatMap(([slot, slug]) => {
+  // The room opens as the link describes, with defaults for anything the link leaves out (PRD 6.8).
+  const link = fromHash(location.hash);
+  if (link.time !== undefined) daylight.setTime(link.time);
+  const defaults = Object.entries({ ...manifest.defaults, ...link.textures }).flatMap(([slot, slug]) => {
     const texture = manifest.textures.find((t) => t.slug === slug);
     return texture && slot in materials ? [applyTexture(slot as Slot, texture)] : [];
   });
+  committed = snapshot();
+  save();
+
+  // The loader stays up until the transcoder, the default room's textures and all thumbnails are in (PRD 6.11).
   const tasks: Promise<unknown>[] = [ktx2.init(), ...defaults, ...hud.thumbnails];
   let done = 0;
   const tick = () => (loader.textContent = `Loading the room… ${Math.round((++done / tasks.length) * 100)}%`);
   for (const task of tasks) task.then(tick, tick);
   Promise.allSettled(tasks).then(async () => {
     requestAnimationFrame(() => loader.classList.add('done'));
+    if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");
     // Then the rest of the set, one texture at a time, to leave bandwidth for a texture someone picks.
     for (const texture of manifest.textures) await load(texture).catch(() => {});
   });

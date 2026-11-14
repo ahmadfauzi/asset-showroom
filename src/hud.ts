@@ -3,12 +3,10 @@ import '@fontsource/jetbrains-mono/400.css';
 import './hud.css';
 import manifest, { type TextureInfo } from '@manifest';
 import slots from './textures/slots.json';
-import { PLACEHOLDER, SLOT_NAMES, type Slot } from './room';
+import { accepts, PLACEHOLDER, SLOT_NAMES, type Slot } from './room';
 
 export const CATEGORIES = { wood: 'Wood', stone: 'Stone and tiles', fabric: 'Fabric and leather', wall: 'Wall finishes' };
 type Category = TextureInfo['category'];
-
-export const accepts = (slot: Slot, category: Category) => (slots[slot] as string[]).includes(category);
 
 // The texture to drag onto a surface travels in the drag data under this type.
 export const DRAG_TYPE = 'text/x-asset-showroom-texture';

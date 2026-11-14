@@ -107,6 +107,111 @@ a:focus-visible {
   color: var(--accent);
 }
 
+#toolbar {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+}
+
+#toolbar button {
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#toolbar button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08);
+}
+
+#toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+#toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+#toast.show {
+  opacity: 1;
+}
+
+#help {
+  max-width: 520px;
+  padding: 20px 24px;
+  color: #e8e8ea;
+  background: rgb(22 22 26 / 0.96);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#help::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+#help h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+#help h3 {
+  margin: 16px 0 2px;
+  font-size: 14px;
+}
+
+#help p {
+  margin: 0;
+  color: #c8c8cc;
+}
+
+#help td {
+  padding: 3px 16px 3px 0;
+  color: #c8c8cc;
+}
+
+#help kbd {
+  padding: 1px 5px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+}
+
+#help form {
+  margin-top: 16px;
+  text-align: right;
+}
+
+#help form button {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.08);
+}
+
+body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #toast {
+    transition: none;
+  }
+}
+
 #daylight {
   position: fixed;
   top: 64px;
