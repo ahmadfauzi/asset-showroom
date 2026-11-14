@@ -1,8 +1,11 @@
 import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import type { TextureInfo } from '@manifest';
 import slots from './textures/slots.json';
 
 export type Slot = keyof typeof slots;
+
+export const accepts = (slot: Slot, category: TextureInfo['category']) => (slots[slot] as string[]).includes(category);
 
 export const SLOT_NAMES: Record<Slot, string> = {
   floor: 'Floor',
