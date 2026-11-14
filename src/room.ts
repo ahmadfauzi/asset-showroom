@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
+import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import slots from './textures/slots.json';
 
@@ -197,5 +197,12 @@ export function buildRoom() {
   add(lamp(0.4, 0.09).map(([g, m]) => [g.translate(0, 0.75, 0), m] as Part), 4.5, 1.3);
   add([soft('rugs', 2, 0.015, 1.6, 0, 0, 0, 0.01)], 4, 2);
 
-  return { group, materials };
+  // Windows let sunlight through. Lamp lights go at the centre of each shade.
+  const meshes = group.children as Mesh[];
+  for (const mesh of meshes) if (mesh.material === glass) mesh.castShadow = false;
+  const lamps = meshes
+    .filter((mesh) => mesh.material === shade)
+    .map((mesh) => new Box3().setFromObject(mesh).getCenter(new Vector3()));
+
+  return { group, materials, glass, shade, lamps };
 }
