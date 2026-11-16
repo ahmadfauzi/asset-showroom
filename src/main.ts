@@ -262,6 +262,9 @@ if (!gl) {
     composer.setPixelRatio(ratio);
     composer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
+    // On screens narrower than 1.3:1, widen the view so the whole room still fits across.
+    const tan = Math.tan(MathUtils.degToRad(20)) * Math.max(1, 1.3 / camera.aspect);
+    camera.fov = MathUtils.radToDeg(2 * Math.atan(tan));
     camera.updateProjectionMatrix();
   };
   window.addEventListener('resize', resize);
