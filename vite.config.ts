@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   const set = loadEnv(mode, process.cwd()).VITE_ASSET_SET || 'free';
   if (!SETS.includes(set)) throw new Error(`VITE_ASSET_SET must be one of ${SETS.join(', ')}, not "${set}"`);
   const textures = `textures-built/${set}`;
+  let outDir = 'dist';
 
   return {
     resolve: { alias: { '@manifest': `/src/textures/${set}.json` } },
@@ -21,6 +22,9 @@ export default defineConfig(({ mode }) => {
             next();
           });
         },
+        configResolved(config) {
+          outDir = config.build.outDir;
+        },
         // Copies the built files of the manifest's textures, then fails the build if a texture has no built
         // files or dist/textures holds anything outside this set's manifest.
         closeBundle() {
@@ -28,10 +32,10 @@ export default defineConfig(({ mode }) => {
           const slugs = new Set(manifest.textures.map((texture) => texture.slug));
           const errors: string[] = [];
           for (const slug of slugs) {
-            if (existsSync(`${textures}/${slug}`)) cpSync(`${textures}/${slug}`, `dist/textures/${slug}`, { recursive: true });
+            if (existsSync(`${textures}/${slug}`)) cpSync(`${textures}/${slug}`, `${outDir}/textures/${slug}`, { recursive: true });
             else errors.push(`${slug} has no built files in ${textures}/. Run npm run textures -- ${set} ${slug}.`);
           }
-          const outside = existsSync('dist/textures') ? readdirSync('dist/textures').filter((name) => !slugs.has(name)) : [];
+          const outside = existsSync(`${outDir}/textures`) ? readdirSync(`${outDir}/textures`).filter((name) => !slugs.has(name)) : [];
           if (outside.length) errors.push(`dist/textures has files that aren't in the ${set} set: ${outside.join(', ')}.`);
           if (errors.length) throw new Error(`Texture set check failed:\n${errors.join('\n')}`);
         },

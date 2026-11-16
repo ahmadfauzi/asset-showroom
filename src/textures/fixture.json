@@ -1,0 +1,24 @@
+{
+  "set": "fixture",
+  "defaults": {
+    "floor": "oak-fixture",
+    "featureWall": "clay-fixture",
+    "walls": "plaster-fixture",
+    "slatWall": "walnut-fixture",
+    "upholstery": "linen-fixture",
+    "accents": "velvet-fixture",
+    "bedding": "linen-fixture",
+    "rugs": "velvet-fixture",
+    "woodwork": "walnut-fixture"
+  },
+  "textures": [
+    { "slug": "oak-fixture", "name": "Oak Fixture", "category": "wood", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "walnut-fixture", "name": "Walnut Fixture", "category": "wood", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "concrete-fixture", "name": "Concrete Fixture", "category": "stone", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "marble-fixture", "name": "Marble Fixture", "category": "stone", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "linen-fixture", "name": "Linen Fixture", "category": "fabric", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [100, 100] },
+    { "slug": "velvet-fixture", "name": "Velvet Fixture", "category": "fabric", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [100, 100] },
+    { "slug": "plaster-fixture", "name": "Plaster Fixture", "category": "wall", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "clay-fixture", "name": "Clay Fixture", "category": "wall", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] }
+  ]
+}

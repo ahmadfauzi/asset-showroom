@@ -251,6 +251,8 @@ if (!gl) {
   composer.addPass(new RenderPass(scene, camera));
   const gtao = new GTAOPass(scene, camera);
   composer.addPass(gtao);
+  // The Playwright tests read the camera and switch GTAO off for steady screenshots.
+  if (manifest.set === 'fixture') Object.assign(window, { showroom: { camera, gtao, renderer } });
   composer.addPass(new UnrealBloomPass(new Vector2(), 0.2, 0.4, 0.9));
   composer.addPass(outline);
   composer.addPass(new SMAAPass());

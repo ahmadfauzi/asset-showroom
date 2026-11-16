@@ -38,7 +38,17 @@ npm run textures -- free
 
 The built files go to `textures-built/<set>/<slug>/`. Commit them with the manifest. A full set build also checks that every slot has a texture it accepts and a valid default.
 
-`VITE_ASSET_SET` picks the set for `npm run dev` and `npm run build`. It is `free` if not set. Only that set's built files are served and copied into `dist/textures/`.
+`VITE_ASSET_SET` picks the set for `npm run dev` and `npm run build`. It is `free` if not set. Only the built files of textures in that set's manifest are copied into `dist/textures/`. The build fails if one of them has no built files, or if `dist/textures/` holds anything else.
+
+## Tests
+
+The Playwright tests run the app with the `fixture` set: 8 plain-colour textures in `textures-built/fixture/`, made by `scripts/make-fixtures.mjs`. They also check the texture script and the set check.
+
+```bash
+npm test
+```
+
+They need Chromium build 1228. If it isn't installed, run `npx playwright install chromium`. The default room picture is compared against `tests/showroom.spec.ts-snapshots/default-room-fixture-win32.png`, which only exists for Windows. To make a new one after an intended change, run `npx playwright test --update-snapshots`.
 
 `public/basis/` holds the KTX2 transcoder from `node_modules/three/examples/jsm/libs/basis/`. Copy it again when you update three.js.
 
