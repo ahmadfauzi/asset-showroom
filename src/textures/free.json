@@ -1,9 +1,51 @@
 {
   "set": "free",
-  "defaults": { "floor": "wood-exterior", "featureWall": "concrete-wall-stones", "slatWall": "wood-exterior", "woodwork": "wood-exterior" },
+  "defaults": {
+    "floor": "ash-wood-board",
+    "featureWall": "denali-quartzite",
+    "walls": "painted-plaster",
+    "slatWall": "ash-wood-board",
+    "upholstery": "boucle-bubbly-rows",
+    "accents": "boucle-bubbly-rows",
+    "bedding": "boucle-bubbly-rows",
+    "rugs": "boucle-bubbly-rows",
+    "woodwork": "ash-wood-board"
+  },
   "textures": [
-    { "slug": "wood-exterior", "name": "Wood Exterior", "category": "wood", "poliigonUrl": "https://www.poliigon.com/texture/", "sizeCm": [200, 200] },
-    { "slug": "concrete-worn", "name": "Concrete Worn", "category": "stone", "poliigonUrl": "https://www.poliigon.com/texture/", "sizeCm": [200, 200] },
-    { "slug": "concrete-wall-stones", "name": "Concrete Wall Stones", "category": "wall", "poliigonUrl": "https://www.poliigon.com/texture/", "sizeCm": [200, 200] }
+    {
+      "slug": "ash-wood-board",
+      "name": "Ash Wood Board",
+      "category": "wood",
+      "poliigonUrl": "https://www.poliigon.com/texture/ash-wood-board-texture-light-beige/4186",
+      "sizeCm": [250, 250]
+    },
+    {
+      "slug": "ivory-ceramic-tile",
+      "name": "Ivory Ceramic Tile",
+      "category": "stone",
+      "poliigonUrl": "https://www.poliigon.com/texture/square-ceramic-glossy-tile-texture-ivory/6956",
+      "sizeCm": [250, 250]
+    },
+    {
+      "slug": "denali-quartzite",
+      "name": "Denali Quartzite",
+      "category": "stone",
+      "poliigonUrl": "https://www.poliigon.com/texture/denali-polished-quartzite-stone-texture-gray/8060",
+      "sizeCm": [250, 250]
+    },
+    {
+      "slug": "painted-plaster",
+      "name": "Painted Plaster",
+      "category": "wall",
+      "poliigonUrl": "https://www.poliigon.com/texture/plain-painted-plaster-texture-white/7664",
+      "sizeCm": [30, 30]
+    },
+    {
+      "slug": "boucle-bubbly-rows",
+      "name": "Bouclé, Bubbly Rows",
+      "category": "fabric",
+      "poliigonUrl": "https://www.poliigon.com/texture/bubbly-rows-boucle-fabric-texture/7827",
+      "sizeCm": [30, 30]
+    }
   ]
 }
