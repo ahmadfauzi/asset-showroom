@@ -1,5 +1,9 @@
 {
   "set": "free",
-  "defaults": {},
-  "textures": []
+  "defaults": { "floor": "wood-exterior", "featureWall": "concrete-wall-stones", "slatWall": "wood-exterior", "woodwork": "wood-exterior" },
+  "textures": [
+    { "slug": "wood-exterior", "name": "Wood Exterior", "category": "wood", "poliigonUrl": "https://www.poliigon.com/texture/", "sizeCm": [200, 200] },
+    { "slug": "concrete-worn", "name": "Concrete Worn", "category": "stone", "poliigonUrl": "https://www.poliigon.com/texture/", "sizeCm": [200, 200] },
+    { "slug": "concrete-wall-stones", "name": "Concrete Wall Stones", "category": "wall", "poliigonUrl": "https://www.poliigon.com/texture/", "sizeCm": [200, 200] }
+  ]
 }
