@@ -110,6 +110,13 @@ export function createDaylight(
   });
   slider.addEventListener('change', onUserChange);
 
+  // On narrow screens the clock and slider move into the tray (PRD 9).
+  const timeRow = document.querySelector('#daylight .time')!;
+  const narrow = matchMedia('(max-width: 900px)');
+  const placeTimeRow = () => document.getElementById(narrow.matches ? 'tray' : 'daylight')!.prepend(timeRow);
+  narrow.addEventListener('change', placeTimeRow);
+  placeTimeRow();
+
   setTime(DEFAULT_TIME);
 
   return {

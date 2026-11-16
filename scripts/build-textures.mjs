@@ -1,5 +1,5 @@
 // Builds KTX2 maps and a thumbnail for each texture in a set. See docs/PRD.md section 7.3.
-// Usage: npm run textures -- <free|premium> [slug]
+// Usage: npm run textures -- <free|premium|fixture> [slug]
 // With a slug, only that texture is built and the slot checks are skipped.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -22,14 +22,7 @@ const fail = (message) => {
 };
 
 const [set, only] = process.argv.slice(2);
-if (set !== 'free' && set !== 'premium') fail('Usage: npm run textures -- <free|premium> [slug]');
-
-const toktx = process.env.TOKTX || 'toktx';
-try {
-  execFileSync(toktx, ['--version'], { stdio: 'ignore' });
-} catch {
-  fail('toktx not found. Install KTX-Software, or set TOKTX to the full path of toktx.');
-}
+if (!['free', 'premium', 'fixture'].includes(set)) fail('Usage: npm run textures -- <free|premium|fixture> [slug]');
 
 const slots = JSON.parse(readFileSync('src/textures/slots.json', 'utf8'));
 const manifest = JSON.parse(readFileSync(`src/textures/${set}.json`, 'utf8'));
@@ -68,6 +61,13 @@ for (const texture of textures) {
 }
 
 if (errors.length) fail(`Texture build failed:\n${errors.map((e) => `- ${e}`).join('\n')}`);
+
+const toktx = process.env.TOKTX || 'toktx';
+try {
+  execFileSync(toktx, ['--version'], { stdio: 'ignore' });
+} catch {
+  fail('toktx not found. Install KTX-Software, or set TOKTX to the full path of toktx.');
+}
 
 // Decodes to 8-bit raw pixels. 1 channel for greyscale maps, 3 for colour and normal.
 const raw = (file, channels, size) => {

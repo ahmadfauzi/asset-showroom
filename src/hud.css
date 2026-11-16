@@ -12,7 +12,8 @@ button {
 }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -231,7 +232,7 @@ body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin: 10px 0;
+  margin-top: 10px;
 }
 
 #daylight .presets button {
@@ -247,10 +248,12 @@ body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
   border-color: var(--accent);
 }
 
-#daylight input {
+.time input {
   width: 100%;
   accent-color: var(--accent);
 }
+
+
 
 #tray {
   position: fixed;
@@ -300,7 +303,7 @@ body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
   white-space: nowrap;
 }
 
-#tabs button[aria-selected='true'] {
+#tabs button[aria-pressed='true'] {
   color: #fff;
   background: rgb(255 255 255 / 0.08);
 }
@@ -396,4 +399,56 @@ body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
   padding: 0 8px;
   font-size: 12px;
   color: #8a8a90;
+}
+
+/* Narrow screens (PRD 9): the slot panel, card and presets hide, the clock and slider move into the tray. */
+@media (max-width: 900px) {
+  #title,
+  #slots,
+  #daylight {
+    display: none;
+  }
+
+  #toolbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    justify-content: space-between;
+  }
+
+  #toolbar button {
+    padding: 5px 7px;
+    font-size: 12px;
+  }
+
+  #toast {
+    top: 56px;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+  }
+
+  #tray {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    transform: none;
+    max-width: none;
+  }
+
+  #tray .time {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  #tray .clock {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 14px;
+  }
+
+  #tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 }

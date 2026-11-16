@@ -40,7 +40,6 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
   for (const category of Object.keys(CATEGORIES) as Category[]) {
     const button = element('button', '', CATEGORIES[category]);
     button.type = 'button';
-    button.setAttribute('role', 'tab');
     button.addEventListener('click', () => {
       tab = category;
       render();
@@ -106,7 +105,7 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
 
     for (const [category, button] of Object.entries(tabButtons) as [Category, HTMLButtonElement][]) {
       button.disabled = !!selected && !accepts(selected, category);
-      button.setAttribute('aria-selected', String(category === tab));
+      button.setAttribute('aria-pressed', String(category === tab));
     }
 
     const inUse = new Set(Object.values(applied).map((texture) => texture.slug));

@@ -7,7 +7,7 @@ declare module '@manifest' {
     sizeCm: [number, number];
   };
   const manifest: {
-    set: 'free' | 'premium';
+    set: 'free' | 'premium' | 'fixture';
     defaults: Record<string, string>;
     textures: TextureInfo[];
   };

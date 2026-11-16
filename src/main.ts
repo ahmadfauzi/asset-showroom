@@ -249,7 +249,10 @@ if (!gl) {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new GTAOPass(scene, camera));
+  const gtao = new GTAOPass(scene, camera);
+  composer.addPass(gtao);
+  // The Playwright tests read the camera and switch GTAO off for steady screenshots.
+  if (manifest.set === 'fixture') Object.assign(window, { showroom: { camera, gtao, renderer } });
   composer.addPass(new UnrealBloomPass(new Vector2(), 0.2, 0.4, 0.9));
   composer.addPass(outline);
   composer.addPass(new SMAAPass());
@@ -262,12 +265,32 @@ if (!gl) {
     composer.setPixelRatio(ratio);
     composer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
+    // On screens narrower than 1.3:1, widen the view so the whole room still fits across.
+    const tan = Math.tan(MathUtils.degToRad(20)) * Math.max(1, 1.3 / camera.aspect);
+    camera.fov = MathUtils.radToDeg(2 * Math.atan(tan));
     camera.updateProjectionMatrix();
   };
   window.addEventListener('resize', resize);
   resize();
 
+  // After the loader hides, time frames 30 to 150. Under 30 fps, turn GTAO off, the first step in PRD 10.
+  // The count restarts if the tab is hidden, since hidden tabs get few frames.
+  let frame = -1;
+  let timedFrom = 0;
+  document.addEventListener('visibilitychange', () => frame >= 0 && (frame = 0));
+  const timeFrames = () => {
+    if (frame < 0 || ++frame < 30) return;
+    if (frame === 30) timedFrom = performance.now();
+    if (frame < 150) return;
+    if ((performance.now() - timedFrom) / 120 > 1000 / 30) {
+      gtao.enabled = false;
+      console.info('Asset Showroom: under 30 fps, so ambient occlusion (GTAO) is off.');
+    }
+    frame = -1;
+  };
+
   renderer.setAnimationLoop(() => {
+    timeFrames();
     const now = camera.position.distanceTo(controls.target);
     camera.position
       .sub(controls.target)
@@ -425,7 +448,10 @@ if (!gl) {
   const tick = () => (loader.textContent = `Loading the room… ${Math.round((++done / tasks.length) * 100)}%`);
   for (const task of tasks) task.then(tick, tick);
   Promise.allSettled(tasks).then(async () => {
-    requestAnimationFrame(() => loader.classList.add('done'));
+    requestAnimationFrame(() => {
+      loader.classList.add('done');
+      frame = 0;
+    });
     if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");
     // Then the rest of the set, one texture at a time, to leave bandwidth for a texture someone picks.
     for (const texture of manifest.textures) await load(texture).catch(() => {});
