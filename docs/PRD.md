@@ -1,6 +1,6 @@
 # Asset Showroom PRD
 
-As of 9 Oct 2026 · Ahmad Fauzi · Status: draft for v1
+As of 9 Oct 2026, v2 section added 17 Nov 2026 · Ahmad Fauzi · Status: v1 built, v2 draft
 
 Reference: *Set the Mood (sael.net/interior) Replication Knowledge Base*, 7 Oct 2026. "The reference" below means that site.
 
@@ -36,8 +36,10 @@ It follows the mechanics of the reference (materials on surface slots, daylight,
 - Texture downloads from the showroom
 - Poliigon API or live catalogue search
 - CMS
-- Poliigon 3D models or HDRIs (textures only)
+- Poliigon 3D models or HDRIs bundled with the app (v3 lets people upload their own; see 5)
 - Poliigon branding in the UI
+
+CC0 decor models from Poly Haven are allowed from v2 (decision 25).
 
 ## 4. Decisions
 
@@ -66,15 +68,28 @@ Settled in the grilling session on 9 Oct 2026.
 | 19 | Name | "Asset Showroom" is a working title |
 | 20 | Builders | Ahmad with Claude Code; milestones without dates |
 
+Added on 17 Nov 2026. These change decisions 4 and 10 for v2 onwards. Section 15 has the detail.
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 21 | Scene | Four separate rooms, shown one at a time, each a cut-away on its own plinth: Living room, Bedroom, Bathroom, Garden |
+| 22 | Versions | v2 rooms and visual pass; v3 uploads (textures, models, HDRI); v4 furniture editing, room recipes, mood meter, cinematic camera |
+| 23 | Garden | Ground category (grass, snow, soil, gravel), sky drawn by code, path lights and stars at night, snow switch with falling flakes |
+| 24 | Old links | `v=1` links keep working and open in the Living room |
+| 25 | Furniture | Code-built pieces for surfaces you retexture; Poly Haven CC0 models for decor (plants, rocks, shrubs, mirror, bench) |
+| 26 | Look | The HUD's colours, fonts, panels and motion may change freely, as long as they stay neutral with no Poliigon branding |
+| 27 | Model tooling | `@gltf-transform/cli` as a dev dependency to shrink and compress models at build time |
+
 ## 5. Scope by version
 
 | Version | Contents |
 | --- | --- |
 | v1 | Textures on 9 slots (click and drag to apply), texture card, fixed furniture layout, daylight slider and 4 time presets, orbit, zoom, reset view, undo and redo, share link, save picture, help, free/premium build switch |
-| v2 | Move, turn, add and remove furniture; 3 room presets (texture and time recipes); better scene detail |
-| v3 | Mood meter with explanation sentence; cinematic camera |
+| v2 | Four rooms (Living room, Bedroom, Bathroom, Garden); better furniture; snow; new look for the HUD and scene |
+| v3 | Uploads: textures, models (placed and moved by drag and drop) and HDRIs, saved in the browser |
+| v4 | Move, turn, add and remove built-in furniture; 3 room recipes (texture and time combinations); mood meter with explanation sentence; cinematic camera |
 
-The rest of this document specifies v1 in detail. v2 and v3 get their own PRD sections before work starts.
+Sections 6 to 14 specify v1. Section 15 specifies v2. v3 and v4 get their own sections before work starts.
 
 ## 6. v1 functional requirements
 
@@ -361,4 +376,167 @@ Manual: frame rate on one MacBook and one Windows laptop with integrated graphic
 | Does the free library cover every category? | Ahmad |
 | Should the repo move to a Poliigon GitHub org? | Ahmad |
 | Event analytics (which textures prospects apply) for v2, after a privacy check | Ahmad |
-| v3 mood meter needs per-texture lightness, warmth and softness. Compute from the colour map or enter in the manifest? | Decide before v3 |
+| v4 mood meter needs per-texture lightness, warmth and softness. Compute from the colour map or enter in the manifest? | Decide before v4 |
+
+## 15. v2: Rooms and visual pass
+
+Settled in the grilling session on 17 Nov 2026. Where this section differs from sections 6 to 13, this section wins for v2.
+
+### 15.1 Why
+
+The flat looks blocky, mostly because of the furniture. People also want to see textures in more kinds of space: a bathroom for tiles, and a garden for grass, snow and stone.
+
+### 15.2 Goals and non-goals
+
+**Goals**
+
+- Four rooms you can switch between in one click.
+- Furniture and scenes that look real at a glance, with no hard-edged boxes.
+- A garden that shows ground textures in daylight, at night and in snow.
+- First load and frame rate stay within section 10's targets for any room.
+
+**Non-goals for v2**
+
+- Uploads of any kind (v3).
+- Moving furniture (v3 for uploaded models, v4 for built-in pieces).
+- Local storage of room state. Section 6.8 still applies.
+- Trees. The smallest CC0 tree found is 21 MB. Shrubs stand in for them.
+
+### 15.3 Rooms
+
+Each room is a cut-away on its own plinth. One room shows at a time. Each has its own home view and orbit limits, set so the camera stays outside walls and above the plinth.
+
+| Key | Name | About | Contents |
+| --- | --- | --- | --- |
+| `living` | Living room | 7 × 5 m | Sofa, armchair, coffee table, sideboard, slat wall, rug, floor lamp, dining table and 4 chairs, plants |
+| `bedroom` | Bedroom | 6 × 5 m | Bed with mattress, duvet and pillows, 2 nightstands with lamps, dresser, rug, desk and chair |
+| `bathroom` | Bathroom | 4 × 3.5 m | Bathtub, walk-in shower with a glass screen, vanity with basin and countertop, toilet, mirror, towels on a rail, window |
+| `garden` | Garden | 12 × 8 m | Lawn, stone path, wooden deck, low fence on two sides, house wall with a door and window on one side, rocks, shrubs, planter, bench or outdoor table set, path lights |
+
+The v1 flat is retired. Its living room, dining corner, bedroom and study pieces move into the Living room and Bedroom.
+
+### 15.4 Surfaces
+
+| Room | Surfaces |
+| --- | --- |
+| Living room | Floor, Walls, Feature wall, Slat wall, Upholstery, Accents, Rugs, Woodwork |
+| Bedroom | Floor, Walls, Feature wall, Bedding, Accents, Rugs, Woodwork |
+| Bathroom | Floor, Walls, Shower wall, Vanity, Countertop, Towels |
+| Garden | Ground, Path, Deck, Fence, Rocks, Cushions |
+
+New surface keys and what they accept. The keys from section 6.2 keep their meaning and accept lists.
+
+| Key | Name | Accepts |
+| --- | --- | --- |
+| `showerWall` | Shower wall | Stone and tiles, Wall finishes |
+| `vanity` | Vanity | Wood, Stone and tiles |
+| `countertop` | Countertop | Stone and tiles |
+| `towels` | Towels | Fabric and leather |
+| `ground` | Ground | Ground |
+| `path` | Path | Stone and tiles |
+| `deck` | Deck | Wood |
+| `fence` | Fence | Wood, Stone and tiles |
+| `rocks` | Rocks | Stone and tiles |
+| `cushions` | Cushions | Fabric and leather |
+
+### 15.5 Ground category
+
+- New category `ground`, shown as "Ground": grass, snow, soil, gravel.
+- The tray gets a fifth tab.
+- The manifest gives a default texture per room and per surface. The set check (7.3) runs per room: every surface in every room needs a texture it accepts and a valid default.
+- The free set has 3 textures today and none for fabric or ground. Ahmad adds free textures for fabric, grass, snow and tiles. Until then, building and testing use the fixture set, which gets plain-colour ground textures.
+
+### 15.6 Switching rooms
+
+- A room switcher lists the four rooms. Clicking one shows that room.
+- Each room keeps its own textures while you switch, for as long as the page is open.
+- Each room also keeps its own time of day and, in the Garden, its snow setting. Switching rooms shows that room's time (builder's call).
+- Switching rooms is not in undo history. Each room has its own undo history, covering its textures, time and snow (builder's call).
+- The share link holds the room you're in and its textures only.
+- Switching takes 600 ms or less. With `prefers-reduced-motion`, it is instant.
+
+### 15.7 Share link
+
+- Version 2 format: `#v=2&room=garden&ground=grass-lawn&path=slate-paving&t=18.5&snow=1`.
+- `room` is one of the keys in 15.3. A missing or unknown room opens the Living room.
+- Surface keys that the room doesn't have are ignored.
+- `snow=1` only counts in the Garden.
+- A `v=1` link opens the Living room with its textures. Keys the Living room doesn't have, such as `bedding`, are ignored.
+- The rest of 6.8 still applies: unknown slugs fall back with a toast, malformed values are ignored, the hash is never inserted as HTML.
+
+### 15.8 Light, sky and snow
+
+- The clock, slider, presets and keys from 6.5 work the same in every room.
+- Indoor rooms: sunlight through the windows, lamps after sunset, windows go dark at night. Indoor reflections come from a generated room environment (three.js `RoomEnvironment`).
+- Garden: a sky drawn by code (three.js `Sky`) that follows the sun and also lights the scene. Stars come out after sunset. Path lights come on at sunset. v3's HDRI upload will be able to replace the sky.
+- Snow switch: shown in the daylight panel in the Garden only. It turns falling snowflakes on and off. It is in the share link and in undo. With `prefers-reduced-motion`, the flakes stay still. Snow on the ground comes from applying a snow texture to the Ground surface.
+
+### 15.9 Furniture
+
+- Code-built pieces for every surface you can retexture: sofa, armchair, chairs, cushions, bed, bedding, rugs, tables, shelves, sideboard, dresser, bathtub, basin, vanity, toilet, towels, deck, fence, path. They get rounded edges, separate cushions and mattresses, tapered legs and similar detail, so none of them reads as a plain box.
+- Poly Haven CC0 models for decor that isn't a surface: plants, shrubs, the bathroom mirror, the garden bench or table set. Rocks are Poly Haven models too, but they are also the Rocks surface.
+- The Garden's Cushions surface is code-built seat pads and cushions on the bench or table set.
+- The Bedroom desk chair's seat and back are part of the Accents surface.
+- Surfaces on models without metre UVs, such as rocks, use triplanar mapping, so any stone texture fits them at its real-world size.
+- Candidate models, from the Poly Haven API on 17 Nov 2026 (size of the 1K glTF with textures): `potted_plant_04` 2.0 MB, `fern_02` 1.1 MB, `ornate_mirror_01` 0.7 MB, `rock_07` 2.1 MB, `rock_09` 1.9 MB, `shrub_02` 1.9 MB, `shrub_03` 1.6 MB, `planter_box_01` 2.2 MB, `painted_wooden_bench` 1.9 MB, `outdoor_table_chair_set_01` 1.2 MB. The builder picks the final set within the load budget.
+
+### 15.10 Model pipeline
+
+Same pattern as textures (7.3):
+
+```
+assets-src/models/<id>/      raw 1K glTF download from Poly Haven, gitignored
+models-built/<id>.glb        committed
+scripts/build-models         reads assets-src/models, writes models-built
+```
+
+The script uses `@gltf-transform/cli` to compress meshes (meshopt) and turn textures into KTX2. It fails with a clear message if a model listed in a room has no built file. Models are the same for the free and premium builds.
+
+`vite.config.ts` serves `models-built/` at `/models/` in dev and copies it into `dist/models/`, the same way it handles textures.
+
+### 15.11 Look and feel
+
+- The HUD's colours, fonts, panels and motion can change. It stays neutral, with no Poliigon branding.
+- The redesign uses the impeccable skill.
+- Every v1 function keeps working, including every key in 6.10, keyboard access and visible focus rings.
+- The scene gets soft shadows, environment reflections and a warmer, more natural light balance. The builder picks the techniques within the performance targets.
+- On narrow screens (900 px and below) the room switcher stays visible and does not overlap the tray at 375 px.
+
+### 15.12 Loading and performance
+
+- The loader waits for the room in the link (or the Living room): its textures, its models and the thumbnails. It does not wait for other rooms.
+- After that, the other rooms load in the background, the active room's remaining textures first.
+- First load for any one room stays under 15 MB.
+- The 60 and 30 fps targets in section 10 apply to every room. GTAO still turns off first if a device falls under 30 fps.
+
+### 15.13 Testing
+
+Playwright, with the fixture set:
+
+- Switching rooms shows the right surfaces and updates the hash.
+- A `v=1` link opens the Living room with its textures.
+- A `v=2` link restores the room, its textures, the time and snow.
+- Undo and redo stay within a room.
+- The snow switch is in the Garden only, and is in the hash and in undo.
+- One default screenshot per room (4).
+
+Build: the per-room set check, and the model check in 15.10.
+
+Manual: frame rate in each room on one MacBook and one Windows laptop with integrated graphics.
+
+### 15.14 Milestones
+
+1. Room system: room list, switcher, `v=2` link, undo per room, loading per room. The Living room rebuilt from the v1 flat.
+2. Model pipeline: build one Poly Haven model end to end and measure it. The candidate garden models total about 12.7 MB before compression, so check the Garden's first load against 15 MB before picking the rest.
+3. Bedroom and Bathroom.
+4. Garden: ground category, sky, stars, path lights, snow.
+5. Furniture detail pass.
+6. HUD and motion redesign with the impeccable skill.
+7. Performance pass, tests, screenshots.
+
+### 15.15 Open questions
+
+| Question | Owner |
+| --- | --- |
+| Free textures for fabric, grass, snow and tiles | Ahmad |
+| Final Poly Haven picks within the 15 MB budget | Builder |
