@@ -14,6 +14,7 @@ export type BuiltRoom = {
   shade: MeshStandardMaterial; // glows at night (lamp shades, path light heads)
   lamps: Vector3[];
   lampPower: number; // each lamp light's intensity at night
+  mirrors: MeshStandardMaterial[]; // model materials that reflect the room, filled in as the models load
   outdoor: boolean;
   extent: number; // half-size of the sun's shadow area, metres
   view: { home: Vector3; target: Vector3; minDistance: number; maxDistance: number; minAzimuth: number; maxAzimuth: number };

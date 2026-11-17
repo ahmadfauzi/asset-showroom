@@ -250,15 +250,24 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
   // Puts a Poly Haven model with the middle of its base at (x, y, z). A model that fails to load is left out.
   // A model given a slot, such as a rock, becomes that surface: its meshes take the slot's material with
   // triplanar mapping, and move up to be children of the group, as the code-built surfaces are.
+  // A mirror's materials go in mirrors, so the daylight can give them the room's reflection at full strength.
   const loading: Promise<void>[] = [];
   const failed: string[] = [];
-  const place = (id: string, x: number, y: number, z: number, { rotY = 0, scale = 1, slot }: { rotY?: number; scale?: number; slot?: Slot } = {}) => {
+  const mirrors: MeshStandardMaterial[] = [];
+  const place = (
+    id: string,
+    x: number,
+    y: number,
+    z: number,
+    { rotY = 0, scale = 1, slot, mirror = false }: { rotY?: number; scale?: number; slot?: Slot; mirror?: boolean } = {},
+  ) => {
     loading.push(
       loadModel(id, ktx2).then(
         (model) => {
           model.position.set(x, y, z);
           model.rotation.y = rotY;
           model.scale.setScalar(scale);
+          if (mirror) model.traverse((object) => (object as Mesh).isMesh && mirrors.push((object as Mesh).material as MeshStandardMaterial));
           if (!slot) return void group.add(model);
           const surface = materials[slot];
           if (!surface) throw new Error(`The ${key} room has no ${slot} surface.`);
@@ -292,6 +301,7 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
       .filter((mesh) => mesh.material === shade)
       .map((mesh) => new Box3().setFromObject(mesh).getCenter(new Vector3())),
     lampPower,
+    mirrors,
     outdoor,
     extent,
     view,

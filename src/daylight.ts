@@ -41,6 +41,8 @@ const SKY_LIGHT = 0.1;
 // Indoors a generated room lights the scene and shows in reflections (PRD 15.8), so the sky fill is lower than
 // outdoors. Both dim after sunset. The garden has no walls to catch the lamp light, so its night fill is higher.
 const ROOM_LIGHT = { day: 0.15, night: 0.03 };
+// A mirror reflects the room at about the brightness of its sunlit walls, far above the room light above.
+const MIRROR = { day: 1, night: 0.1 };
 const FILL = { day: 0.3, night: 0.2 };
 const FILL_OUTDOORS = { day: 1.2, night: 1.6 };
 
@@ -145,6 +147,10 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
     const fill = room?.outdoor ? FILL_OUTDOORS : FILL;
     sky.intensity = MathUtils.lerp(fill.night, fill.day, light);
     scene.environmentIntensity = room?.outdoor ? SKY_LIGHT : MathUtils.lerp(ROOM_LIGHT.night, ROOM_LIGHT.day, light);
+    for (const mirror of room?.mirrors ?? []) {
+      mirror.envMap = roomEnvironment;
+      mirror.envMapIntensity = MathUtils.lerp(MIRROR.night, MIRROR.day, light);
+    }
 
     // After sunset the lamps come on and the windows go dark.
     const lampsOn = MathUtils.smoothstep(time, SUNSET - 0.5, SUNSET + 0.5);
@@ -216,6 +222,8 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
       sun.shadow.camera.updateProjectionMatrix();
       room = next;
       setTime(time);
+      // The mirrors are known once the models load.
+      void next.models.then(() => room === next && setTime(time));
     },
     // Call once per frame.
     update() {

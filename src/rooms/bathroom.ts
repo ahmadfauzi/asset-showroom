@@ -61,7 +61,7 @@ export function buildBathroom(ktx2: KTX2Loader): BuiltRoom {
 
   // The Poly Haven mirror over the basin, scaled up from 0.49 × 0.74 m. Its origin is the middle of the frame, with
   // its back on the wall.
-  place('ornate_mirror_01', 1.175, 1.6, -1.745, { scale: 1.35 });
+  place('ornate_mirror_01', 1.175, 1.6, -1.745, { scale: 1.35, mirror: true });
 
   // The wall lamp is close to the wall, so its light is dimmer than in the other rooms.
   return room.finish(3, view([3.7, 3.9, 4.8], 4, 11), false, 4);
