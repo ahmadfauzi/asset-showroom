@@ -490,7 +490,7 @@ models-built/<id>.glb        committed
 scripts/build-models         reads assets-src/models, writes models-built
 ```
 
-The script uses `@gltf-transform/cli` to compress meshes (meshopt) and turn textures into KTX2. It fails with a clear message if a model listed in a room has no built file. Models are the same for the free and premium builds.
+The script uses `@gltf-transform/cli` to compress meshes (meshopt) and turn textures into KTX2. It fails with a clear message if a model listed in a room has no built file. Models are the same for the free and premium builds. Textures are scaled down to 512 px. At 1024 px `potted_plant_04` was 1.99 MB and at 512 px it is 0.63 MB, and the two look the same at the size it shows on screen. KTX2 worked, so the webp fallback is not used.
 
 `vite.config.ts` serves `models-built/` at `/models/` in dev and copies it into `dist/models/`, the same way it handles textures.
 

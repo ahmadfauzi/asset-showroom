@@ -1,4 +1,5 @@
 import type { Group, MeshStandardMaterial, Vector3 } from 'three';
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { ROOMS, type RoomKey, type Slot } from '../room';
 import { buildBedroom } from './bedroom';
 import { buildLiving } from './living';
@@ -14,21 +15,21 @@ export type BuiltRoom = {
   outdoor: boolean;
   extent: number; // half-size of the sun's shadow area, metres
   view: { home: Vector3; target: Vector3; minDistance: number; maxDistance: number; minAzimuth: number; maxAzimuth: number };
-  models: Promise<void>; // settles when decor models are placed (Task 5)
+  models: Promise<string[]>; // settles when the decor models are placed, with the ids of any that failed to load
 };
 
-export function buildRoom(key: RoomKey): BuiltRoom {
-  if (key === 'living') return buildLiving();
-  if (key === 'bedroom') return buildBedroom();
-  return placeholder(key);
+export function buildRoom(key: RoomKey, ktx2: KTX2Loader): BuiltRoom {
+  if (key === 'living') return buildLiving(ktx2);
+  if (key === 'bedroom') return buildBedroom(ktx2);
+  return placeholder(key, ktx2);
 }
 
 // The Bathroom and Garden until they are built: a plinth with the floor or ground as one panel,
 // wall-type surfaces as panels along the back and the rest as small boxes.
 const WALL_TYPES: Slot[] = ['walls', 'showerWall', 'fence'];
 
-function placeholder(key: RoomKey): BuiltRoom {
-  const room = roomKit(key);
+function placeholder(key: RoomKey, ktx2: KTX2Loader): BuiltRoom {
+  const room = roomKit(key, ktx2);
   const [base, ...rest] = ROOMS[key].slots as Slot[];
   const walls = rest.filter((slot) => WALL_TYPES.includes(slot));
   const others = rest.filter((slot) => !WALL_TYPES.includes(slot));

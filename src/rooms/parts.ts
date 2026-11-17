@@ -1,5 +1,7 @@
 import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { loadModel } from '../models';
 import { PLACEHOLDER, ROOMS, type RoomKey, type Slot } from '../room';
 import type { BuiltRoom } from './index';
 
@@ -81,7 +83,7 @@ export const view = ([x, y, z]: [number, number, number], minDistance: number, m
 });
 
 // Starts a room: one placeholder-coloured material per surface the room has, a group, and add() to place parts.
-export function roomKit(key: RoomKey) {
+export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
   const materials: Partial<Record<Slot, MeshStandardMaterial>> = {};
   for (const slot of ROOMS[key].slots as Slot[]) materials[slot] = new MeshStandardMaterial({ color: PLACEHOLDER[slot], roughness: 0.8 });
   const group = new Group();
@@ -102,7 +104,26 @@ export function roomKit(key: RoomKey) {
     }
   };
 
-  // Lamp lights go at the centre of each shade.
+  // Puts a Poly Haven model with the middle of its base at (x, y, z). A model that fails to load is left out.
+  const loading: Promise<void>[] = [];
+  const failed: string[] = [];
+  const place = (id: string, x: number, y: number, z: number, rotY = 0) => {
+    loading.push(
+      loadModel(id, ktx2).then(
+        (model) => {
+          model.position.set(x, y, z);
+          model.rotation.y = rotY;
+          group.add(model);
+        },
+        (error) => {
+          console.warn(error);
+          failed.push(id);
+        },
+      ),
+    );
+  };
+
+  // Lamp lights go at the centre of each shade. Call finish() after the last place().
   const finish = (extent: number, view: BuiltRoom['view'], outdoor = false): BuiltRoom => ({
     key,
     group,
@@ -115,8 +136,8 @@ export function roomKit(key: RoomKey) {
     outdoor,
     extent,
     view,
-    models: Promise.resolve(),
+    models: Promise.all(loading).then(() => failed),
   });
 
-  return { add, finish };
+  return { add, place, finish };
 }

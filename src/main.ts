@@ -444,7 +444,7 @@ if (!gl) {
   const sessionFor = (key: RoomKey) => (sessions[key] ??= createSession(key));
   const createSession = (key: RoomKey) => {
     const fromLink = key === link.room;
-    const built = buildRoom(key);
+    const built = buildRoom(key, ktx2);
     const time = fromLink ? (link.time ?? DEFAULT_TIME) : DEFAULT_TIME;
     const snow = fromLink && link.snow;
     const session: RoomSession = {
@@ -454,7 +454,7 @@ if (!gl) {
       history: createHistory<RoomState>({ textures: {}, time, snow }), // replaced below, once the picks are in
       time,
       snow,
-      loads: [built.models],
+      loads: [built.models.then((failed) => failed.length && toolbar.toast("Couldn't load some decor. The room still works."))],
     };
     const picks = { ...(manifest.defaults[key] ?? {}), ...(fromLink ? link.textures : {}) };
     for (const [slot, slug] of Object.entries(picks) as [Slot, string][]) {

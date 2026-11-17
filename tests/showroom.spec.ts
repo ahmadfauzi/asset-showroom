@@ -26,6 +26,13 @@ test('loads and renders the room', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('a model that fails to load does not stop the room', async ({ page }) => {
+  await page.route('**/models/**', (route) => route.fulfill({ status: 404 }));
+  const errors = await open(page);
+  await expect(page.locator('#toast')).toContainText("Couldn't load");
+  expect(errors.filter((e) => !e.includes('404'))).toEqual([]);
+});
+
 test('selecting a slot dims the tabs it does not accept', async ({ page }) => {
   await open(page);
   await slot(page, 'Floor').click();

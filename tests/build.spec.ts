@@ -50,12 +50,12 @@ test('the texture script rejects an unknown set', () => {
 test.describe('set isolation', () => {
   test.describe.configure({ mode: 'serial' });
   const outDir = join(tmpdir(), 'asset-showroom-isolation');
-  const build = () =>
+  const build = (env: Record<string, string> = {}) =>
     spawnSync('npx', ['vite', 'build', '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'], {
       cwd: root,
       encoding: 'utf8',
       shell: true,
-      env: { ...process.env, VITE_ASSET_SET: 'fixture' },
+      env: { ...process.env, VITE_ASSET_SET: 'fixture', ...env },
     });
 
   test('dist/textures holds exactly the active set', () => {
@@ -76,6 +76,23 @@ test.describe('set isolation', () => {
       expect(run.stderr + run.stdout).toContain("aren't in the fixture set: premium-only");
     } finally {
       rmSync(join(root, 'public/textures'), { recursive: true, force: true });
+    }
+  });
+
+  test('dist/models holds the room models', () => {
+    const run = build();
+    expect(run.status, run.stderr).toBe(0);
+    expect(readdirSync(join(outDir, 'models'))).toEqual(['potted_plant_04.glb']);
+  });
+
+  test('the build fails when a room model has no built file', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'models-empty-'));
+    try {
+      const run = build({ MODELS_DIR: empty });
+      expect(run.status).not.toBe(0);
+      expect(run.stderr + run.stdout).toContain('potted_plant_04 has no built file in models-built/. Run npm run models -- potted_plant_04.');
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
     }
   });
 

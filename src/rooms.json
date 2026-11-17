@@ -11,7 +11,7 @@
       "rugs",
       "woodwork"
     ],
-    "models": []
+    "models": ["potted_plant_04"]
   },
   "bedroom": {
     "name": "Bedroom",

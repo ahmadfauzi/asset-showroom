@@ -1,10 +1,11 @@
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { BuiltRoom } from './index';
 import { box, chair, cylinder, glass, H, lamp, metal, plinth, roomKit, shade, sofa, soft, table, view } from './parts';
 
 // Living room, 7 × 5 m: the v1 living room and dining corner. The front (+z) and right (+x) sides are open.
-export function buildLiving(): BuiltRoom {
-  const room = roomKit('living');
-  const { add } = room;
+export function buildLiving(ktx2: KTX2Loader): BuiltRoom {
+  const room = roomKit('living', ktx2);
+  const { add, place } = room;
 
   // Shell: feature wall behind the sofa, a window on the right of the back wall, plain left wall.
   add([
@@ -44,6 +45,9 @@ export function buildLiving(): BuiltRoom {
     Math.PI / 2,
   );
   add(lamp(1.5, 0.22), -2.9, -2);
+
+  // A potted plant on the coffee table.
+  place('potted_plant_04', 0.2, 0.38, -0.7);
 
   // Dining corner, front left, with a pendant lamp.
   add(table(1.6, 0.9), -2, 1.5);

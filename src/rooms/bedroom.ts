@@ -1,9 +1,10 @@
+import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { BuiltRoom } from './index';
 import { box, chair, glass, H, lamp, metal, plinth, roomKit, soft, view, type Part } from './parts';
 
 // Bedroom, 6 × 5 m: the v1 bed and study pieces, plus a dresser. The front (+z) and right (+x) sides are open.
-export function buildBedroom(): BuiltRoom {
-  const room = roomKit('bedroom');
+export function buildBedroom(ktx2: KTX2Loader): BuiltRoom {
+  const room = roomKit('bedroom', ktx2);
   const { add } = room;
 
   // Shell: feature wall behind the bed, a window over the desk in the left wall.

@@ -40,6 +40,29 @@ The built files go to `textures-built/<set>/<slug>/`. Commit them with the manif
 
 `VITE_ASSET_SET` picks the set for `npm run dev` and `npm run build`. It is `free` if not set. Only the built files of textures in that set's manifest are copied into `dist/textures/`. The build fails if one of them has no built files, or if `dist/textures/` holds anything else.
 
+## Models
+
+Decor models are CC0 glTF files from [Poly Haven](https://polyhaven.com/models). The ids a room uses are listed in `src/rooms.json`. The script needs KTX-Software too, because it turns the textures into KTX2.
+
+```
+assets-src/models/<id>/<id>_1k.gltf   the raw 1K glTF download, with its .bin and textures/ folder. Gitignored.
+models-built/<id>.glb                 the built model. Commit it.
+```
+
+Build one model, or every model listed in `src/rooms.json`:
+
+```bash
+npm run models -- potted_plant_04
+```
+
+```bash
+npm run models
+```
+
+The script compresses the mesh with meshopt and the textures with KTX2, at 512 px. It takes a minute or two per model. If `toktx` is not on your PATH, set `TOKTX` to its full path.
+
+In dev, `/models/` is served from `models-built/`. `npm run build` copies the models listed in `src/rooms.json` to `dist/models/` and fails if one has no built file. A model that fails to load in the browser is skipped, and a toast says so.
+
 ## Tests
 
 The Playwright tests run the app with the `fixture` set: 8 plain-colour textures in `textures-built/fixture/`, made by `scripts/make-fixtures.mjs`. They also check the texture script and the set check.
