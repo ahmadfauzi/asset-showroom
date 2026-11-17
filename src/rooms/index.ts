@@ -1,6 +1,7 @@
 import type { Group, MeshStandardMaterial, Vector3 } from 'three';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { ROOMS, type RoomKey, type Slot } from '../room';
+import { buildBathroom } from './bathroom';
 import { buildBedroom } from './bedroom';
 import { buildLiving } from './living';
 import { box, H, plinth, roomKit, soft, view } from './parts';
@@ -21,10 +22,11 @@ export type BuiltRoom = {
 export function buildRoom(key: RoomKey, ktx2: KTX2Loader): BuiltRoom {
   if (key === 'living') return buildLiving(ktx2);
   if (key === 'bedroom') return buildBedroom(ktx2);
+  if (key === 'bathroom') return buildBathroom(ktx2);
   return placeholder(key, ktx2);
 }
 
-// The Bathroom and Garden until they are built: a plinth with the floor or ground as one panel,
+// The Garden until it is built: a plinth with the floor or ground as one panel,
 // wall-type surfaces as panels along the back and the rest as small boxes.
 const WALL_TYPES: Slot[] = ['walls', 'showerWall', 'fence'];
 

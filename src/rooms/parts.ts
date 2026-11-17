@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Group, LatheGeometry, Mesh, MeshStandardMaterial, Vector2, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { loadModel } from '../models';
@@ -12,6 +12,11 @@ export const plinth = new MeshStandardMaterial({ color: '#2b2b2e', roughness: 0.
 export const metal = new MeshStandardMaterial({ color: '#1e1e1e', roughness: 0.4, metalness: 0.8 });
 export const shade = new MeshStandardMaterial({ color: '#efe6d2', emissive: '#ffd59a', emissiveIntensity: 0, roughness: 0.9 });
 export const glass = new MeshStandardMaterial({ color: '#cfe0ee', emissive: '#cfe0ee', emissiveIntensity: 0.4, roughness: 0.1 });
+// Clear glass for the shower screen. It is see-through and casts no shadow, and it doesn't write depth, so it
+// leaves no hole in the ambient occlusion.
+export const screenGlass = new MeshStandardMaterial({ color: '#dcebf2', transparent: true, opacity: 0.22, roughness: 0.05, depthWrite: false });
+// Glazed white ceramic for the bathtub, basin and toilet. Two-sided because the basin is a thin shell.
+export const ceramic = new MeshStandardMaterial({ color: '#f3f1ed', roughness: 0.18, side: DoubleSide });
 
 export type Part = [BufferGeometry, Slot | MeshStandardMaterial];
 
@@ -71,6 +76,51 @@ export const lamp = (stand: number, r: number): Part[] => [
   cylinder(shade, r, r * 1.3, 0, stand - r * 0.2, 0),
 ];
 
+// Bathroom pieces, also built facing +z around a local origin.
+
+// A tub 1.7 m long (along x), with a rim and a tap at one end.
+export const bathtub = (w = 1.7, d = 0.75): Part[] => [
+  soft(ceramic, w, 0.14, d, 0, 0, 0),
+  soft(ceramic, w, 0.55, 0.08, 0, 0, -(d / 2 - 0.04)),
+  soft(ceramic, w, 0.55, 0.08, 0, 0, d / 2 - 0.04),
+  soft(ceramic, 0.08, 0.55, d - 0.16, -(w / 2 - 0.04), 0, 0),
+  soft(ceramic, 0.08, 0.55, d - 0.16, w / 2 - 0.04, 0, 0),
+  cylinder(metal, 0.015, 0.2, w / 2 - 0.12, 0.55, -(d / 2 - 0.05)),
+  soft(metal, 0.025, 0.025, 0.12, w / 2 - 0.12, 0.72, -(d / 2 - 0.1), 0.01),
+];
+
+// A round vessel basin with a tap behind it. The base of the bowl sits at y = 0.
+export const basin = (): Part[] => [
+  [new LatheGeometry([[0, 0.0], [0.15, 0.0], [0.2, 0.06], [0.22, 0.13], [0.2, 0.13], [0.18, 0.06], [0, 0.03]].map(([x, y]) => new Vector2(x, y)), 32), ceramic],
+  cylinder(metal, 0.014, 0.22, 0, 0, -0.27),
+  soft(metal, 0.022, 0.022, 0.12, 0, 0.2, -0.22, 0.008),
+];
+
+// A close-coupled toilet with its back at z = -0.33.
+export const toilet = (): Part[] => [
+  soft(ceramic, 0.24, 0.3, 0.34, 0, 0, -0.05),
+  soft(ceramic, 0.37, 0.14, 0.56, 0, 0.28, 0),
+  soft(ceramic, 0.36, 0.03, 0.5, 0, 0.42, 0.03, 0.015),
+  soft(ceramic, 0.34, 0.025, 0.44, 0, 0.45, 0.03, 0.012),
+  soft(ceramic, 0.38, 0.38, 0.18, 0, 0.4, -0.24),
+  cylinder(metal, 0.025, 0.012, 0, 0.78, -0.24),
+];
+
+// A towel hanging over a rail at height h. Origin at the bottom centre, back toward -z. The fold on top is a
+// bar along x, so the rail (a thin bar at y = h) runs through it.
+export const towel = (w: number, h: number): Part[] => [
+  soft('towels', w, h, 0.03, 0, 0, 0.035, 0.012),
+  soft('towels', w, h * 0.8, 0.03, 0, h * 0.2, -0.035, 0.012),
+  [new CylinderGeometry(0.04, 0.04, w, 16).rotateZ(Math.PI / 2).translate(0, h, 0), 'towels'],
+];
+
+// A fixed glass screen w wide and h tall, with a metal channel along the floor and a bar up its free edge.
+export const showerScreen = (w: number, h: number): Part[] => [
+  [new BoxGeometry(w, h, 0.012).translate(0, h / 2 + 0.03, 0), screenGlass],
+  soft(metal, w, 0.03, 0.03, 0, 0, 0, 0.008),
+  soft(metal, 0.025, h + 0.03, 0.025, w / 2, 0, 0, 0.008),
+];
+
 // A home view from the open front right, looking at the middle of the room. The camera can turn from just
 // past the front to just past the right side.
 export const view = ([x, y, z]: [number, number, number], minDistance: number, maxDistance: number): BuiltRoom['view'] => ({
@@ -89,7 +139,7 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
   const group = new Group();
 
   // Turns the parts by rotY, moves them to (x, z) and adds them as meshes. Slot meshes get userData.slot.
-  // Glass doesn't cast shadows, so sunlight comes through windows.
+  // Window glass and the shower screen don't cast shadows, so sunlight comes through them.
   const add = (parts: Part[], x = 0, z = 0, rotY = 0) => {
     for (const [geometry, material] of parts) {
       geometry.rotateY(rotY).translate(x, 0, z);
@@ -98,7 +148,7 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
       if (!surface) throw new Error(`The ${key} room has no ${material} surface.`);
       const mesh = new Mesh(geometry, surface);
       if (typeof material === 'string') mesh.userData.slot = material;
-      mesh.castShadow = material !== glass;
+      mesh.castShadow = material !== glass && material !== screenGlass;
       mesh.receiveShadow = true;
       group.add(mesh);
     }

@@ -224,6 +224,16 @@ test('the last room clicked wins', async ({ page }) => {
   expect(written.filter((url) => url.includes('room=bedroom'))).toEqual([]);
 });
 
+test('the bathroom has its six surfaces and its mirror', async ({ page }) => {
+  const mirror = page.waitForResponse((response) => response.url().endsWith('/models/ornate_mirror_01.glb') && response.ok(), { timeout: 20_000 });
+  await open(page, '#v=2&room=bathroom');
+  for (const name of ['Floor', 'Walls', 'Shower wall', 'Vanity', 'Countertop', 'Towels']) await expect(slot(page, name)).toBeVisible();
+  await expect(slot(page, 'Rugs')).toHaveCount(0);
+  expect(await hash(page)).toContain('showerWall=concrete-fixture');
+  await mirror;
+  await expect(page.locator('#toast')).not.toContainText("Couldn't load");
+});
+
 test('default room screenshot, fixture set', async ({ page }) => {
   await open(page);
   // GTAO may switch itself off part-way through on a slow machine, so turn it off for a steady picture.

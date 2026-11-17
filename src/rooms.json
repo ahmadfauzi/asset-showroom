@@ -36,7 +36,7 @@
       "countertop",
       "towels"
     ],
-    "models": []
+    "models": ["ornate_mirror_01"]
   },
   "garden": {
     "name": "Garden",

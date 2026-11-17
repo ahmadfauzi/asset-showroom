@@ -82,7 +82,7 @@ test.describe('set isolation', () => {
   test('dist/models holds the room models', () => {
     const run = build();
     expect(run.status, run.stderr).toBe(0);
-    expect(readdirSync(join(outDir, 'models'))).toEqual(['potted_plant_04.glb']);
+    expect(readdirSync(join(outDir, 'models'))).toEqual(['ornate_mirror_01.glb', 'potted_plant_04.glb']);
   });
 
   test('the build fails when a room model has no built file', () => {
