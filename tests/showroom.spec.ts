@@ -286,6 +286,32 @@ test('leaving the garden removes the sky and the stars', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('snow is a garden switch in the link and in undo', async ({ page }) => {
+  const errors = await open(page);
+  await expect(page.locator('#snow')).toBeHidden();
+  await room(page, 'Garden').click();
+  // The Garden draws slowly in headless Chromium, and a slow frame holds up the reload below, so switch GTAO off.
+  await page.evaluate(() => ((window as any).showroom.gtao.enabled = false));
+  await page.locator('#snow').click();
+  await expect(page.locator('#snow')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => hash(page)).toContain('snow=1');
+  // The flakes are in the scene while snow is on and the Garden shows.
+  const flakes = () => page.evaluate(() => (window as any).showroom.scene.children.filter((c: any) => c.isPoints && c.material.isShaderMaterial).length);
+  await expect.poll(flakes).toBe(1);
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).not.toContain('snow=1');
+  await expect(page.locator('#snow')).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(flakes).toBe(0);
+  await page.goto('/#v=2&room=garden&snow=1'); // a hash edit reloads the page
+  await expect(page.locator('#loader')).toHaveClass(/done/, { timeout: 120_000 });
+  await expect(page.locator('#snow')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(flakes).toBe(1);
+  await room(page, 'Living room').click();
+  await expect(page.locator('#snow')).toBeHidden();
+  await expect.poll(flakes).toBe(0);
+  expect(errors).toEqual([]);
+});
+
 test('default room screenshot, fixture set', async ({ page }) => {
   await open(page);
   // GTAO may switch itself off part-way through on a slow machine, so turn it off for a steady picture.

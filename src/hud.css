@@ -278,7 +278,8 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
   margin-top: 10px;
 }
 
-#daylight .presets button {
+#daylight .presets button,
+#snow {
   padding: 5px 6px;
   border-radius: 6px;
   font-size: 12px;
@@ -286,9 +287,15 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
   background: rgb(255 255 255 / 0.05);
 }
 
-#daylight .presets button[aria-pressed='true'] {
+#daylight .presets button[aria-pressed='true'],
+#snow[aria-pressed='true'] {
   color: #fff;
   border-color: var(--accent);
+}
+
+#snow {
+  width: 100%;
+  margin-top: 4px;
 }
 
 .time input {

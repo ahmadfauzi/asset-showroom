@@ -29,6 +29,7 @@ import { commit as record, createHistory, redo as stepForward, undo as stepBack,
 import { createHud, DRAG_TYPE } from './hud';
 import { accepts, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 import { buildRoom, type BuiltRoom } from './rooms/index';
+import { createSnow } from './snow';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
 
@@ -41,6 +42,7 @@ type RoomSession = {
   history: History<RoomState>;
   time: number; // the room's time while another room shows
   snow: boolean;
+  flakes?: ReturnType<typeof createSnow>; // the Garden only
   loads: Promise<unknown>[]; // the default textures and models, which the loader waits for
 };
 
@@ -191,8 +193,21 @@ if (!gl) {
     }
     daylight.setTime(state.time);
     active.snow = state.snow;
+    showSnow();
     save();
   };
+  // The switch shows in the Garden only. The flakes are in the scene only while the Garden shows with snow on.
+  const snowButton = document.getElementById('snow')!;
+  const showSnow = () => {
+    for (const session of Object.values(sessions)) session.flakes?.set(session === active && session.snow);
+    snowButton.hidden = !active.flakes;
+    snowButton.setAttribute('aria-pressed', String(active.snow));
+  };
+  snowButton.addEventListener('click', () => {
+    active.snow = !active.snow;
+    showSnow();
+    commit();
+  });
   const undo = () => restore(stepBack(active.history));
   const redo = () => restore(stepForward(active.history));
 
@@ -302,6 +317,7 @@ if (!gl) {
       .add(controls.target);
     controls.update();
     daylight.update();
+    active.flakes?.update(performance.now() / 1000);
     composer.render();
   });
 
@@ -466,6 +482,12 @@ if (!gl) {
       const texture = manifest.textures.find((t) => t.slug === slug);
       if (texture && built.materials[slot]) session.loads.push(applyTexture(session, slot, texture));
     }
+    // The flakes fall inside the garden's bounds, with the top 4 m higher.
+    if (key === 'garden') {
+      const area = new Box3().setFromObject(built.group);
+      area.max.y += 4;
+      session.flakes = createSnow(scene, area, reducedMotion);
+    }
     session.history = createHistory(snapshot(session));
     return session;
   };
@@ -488,6 +510,7 @@ if (!gl) {
     daylight.setTime(session.time);
     select(null);
     hud.setRoom(key, session.current);
+    showSnow();
     save();
   };
 
