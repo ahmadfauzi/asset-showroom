@@ -13,12 +13,13 @@ test('the texture script lists every problem and stops', () => {
   try {
     mkdirSync(join(dir, 'src/textures'), { recursive: true });
     cpSync(join(root, 'src/textures/slots.json'), join(dir, 'src/textures/slots.json'));
+    cpSync(join(root, 'src/rooms.json'), join(dir, 'src/rooms.json'));
     const texture = (slug: string, category: string) => ({ slug, name: slug, category, poliigonUrl: '', sizeCm: [100, 100] });
     writeFileSync(
       join(dir, 'src/textures/fixture.json'),
       JSON.stringify({
         set: 'fixture',
-        defaults: { floor: 'linen' },
+        defaults: { living: { floor: 'linen' } },
         textures: [texture('oak', 'wood'), texture('linen', 'fabric'), texture('ghost', 'wood')],
       }),
     );
@@ -31,9 +32,10 @@ test('the texture script lists every problem and stops', () => {
     expect(run.status).toBe(1);
     expect(run.stderr).toContain('ghost: no folder at');
     expect(run.stderr).toContain('linen: no roughness map');
-    expect(run.stderr).toContain('walls: no texture in stone or wall');
-    expect(run.stderr).toContain('floor: default "linen" is missing or not accepted');
-    expect(run.stderr).toContain('woodwork: default "" is missing');
+    expect(run.stderr).toContain('living/walls: no texture in stone or wall');
+    expect(run.stderr).toContain('living/floor: default "linen" is missing or not accepted');
+    expect(run.stderr).toContain('garden/ground: no texture in ground');
+    expect(run.stderr).toContain('bathroom/towels: default "" is missing');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -60,7 +62,7 @@ test.describe('set isolation', () => {
     const run = build();
     expect(run.status, run.stderr).toBe(0);
     expect(readdirSync(join(outDir, 'textures')).sort()).toEqual(
-      ['clay', 'concrete', 'linen', 'marble', 'oak', 'plaster', 'velvet', 'walnut'].map((name) => `${name}-fixture`),
+      ['clay', 'concrete', 'grass', 'linen', 'marble', 'oak', 'plaster', 'snow', 'velvet', 'walnut'].map((name) => `${name}-fixture`),
     );
   });
 

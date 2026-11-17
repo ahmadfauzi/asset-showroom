@@ -2,10 +2,9 @@ import '@fontsource-variable/inter/wght.css';
 import '@fontsource/jetbrains-mono/400.css';
 import './hud.css';
 import manifest, { type TextureInfo } from '@manifest';
-import slots from './textures/slots.json';
-import { accepts, PLACEHOLDER, SLOT_NAMES, type Slot } from './room';
+import { accepts, FLAT_SLOTS, PLACEHOLDER, SLOT_NAMES, type Slot } from './room';
 
-export const CATEGORIES = { wood: 'Wood', stone: 'Stone and tiles', fabric: 'Fabric and leather', wall: 'Wall finishes' };
+export const CATEGORIES = { wood: 'Wood', stone: 'Stone and tiles', fabric: 'Fabric and leather', wall: 'Wall finishes', ground: 'Ground' };
 type Category = TextureInfo['category'];
 
 // The texture to drag onto a surface travels in the drag data under this type.
@@ -27,7 +26,7 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
   let tab: Category = 'wood';
 
   const slotButtons = {} as Record<Slot, HTMLButtonElement>;
-  for (const slot of Object.keys(slots) as Slot[]) {
+  for (const slot of FLAT_SLOTS) {
     const button = element('button', 'slot');
     button.type = 'button';
     button.append(element('span', 'thumb'), element('span', '', SLOT_NAMES[slot]));

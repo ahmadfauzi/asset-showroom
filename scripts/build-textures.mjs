@@ -25,6 +25,7 @@ const [set, only] = process.argv.slice(2);
 if (!['free', 'premium', 'fixture'].includes(set)) fail('Usage: npm run textures -- <free|premium|fixture> [slug]');
 
 const slots = JSON.parse(readFileSync('src/textures/slots.json', 'utf8'));
+const rooms = JSON.parse(readFileSync('src/rooms.json', 'utf8'));
 const manifest = JSON.parse(readFileSync(`src/textures/${set}.json`, 'utf8'));
 const textures = only ? manifest.textures.filter((t) => t.slug === only) : manifest.textures;
 const errors = [];
@@ -32,13 +33,19 @@ const errors = [];
 if (only && !textures.length) errors.push(`${only}: not in src/textures/${set}.json`);
 
 if (!only) {
-  for (const [slot, accepts] of Object.entries(slots)) {
-    if (!manifest.textures.some((t) => accepts.includes(t.category))) {
-      errors.push(`${slot}: no texture in ${accepts.join(' or ')}`);
-    }
-    const fallback = manifest.textures.find((t) => t.slug === manifest.defaults[slot]);
-    if (!fallback || !accepts.includes(fallback.category)) {
-      errors.push(`${slot}: default "${manifest.defaults[slot] ?? ''}" is missing or not accepted by this slot`);
+  // Every surface in every room needs a texture it accepts and a valid default (PRD section 15.5).
+  for (const [room, { slots: roomSlots }] of Object.entries(rooms)) {
+    for (const slot of roomSlots) {
+      const accepts = slots[slot];
+      const where = `${room}/${slot}`;
+      if (!manifest.textures.some((t) => accepts.includes(t.category))) {
+        errors.push(`${where}: no texture in ${accepts.join(' or ')}`);
+      }
+      const slug = manifest.defaults[room]?.[slot];
+      const fallback = manifest.textures.find((t) => t.slug === slug);
+      if (!fallback || !accepts.includes(fallback.category)) {
+        errors.push(`${where}: default "${slug ?? ''}" is missing or not accepted by this slot`);
+      }
     }
   }
 }

@@ -1,13 +1,12 @@
 import manifest from '@manifest';
-import { accepts, type Slot } from './room';
-import slots from './textures/slots.json';
+import { accepts, FLAT_SLOTS, type Slot } from './room';
 
 export type RoomState = { textures: Partial<Record<Slot, string>>; time: number };
 
 // Share link format (PRD 6.8): #v=1&floor=walnut-planks&walls=white-plaster&t=18.5
 export function toHash(state: RoomState) {
   const params = new URLSearchParams({ v: '1' });
-  for (const slot of Object.keys(slots) as Slot[]) {
+  for (const slot of FLAT_SLOTS) {
     const slug = state.textures[slot];
     if (slug) params.set(slot, slug);
   }
@@ -22,7 +21,7 @@ export function fromHash(hash: string) {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   if (params.get('v') !== '1') return link;
 
-  for (const slot of Object.keys(slots) as Slot[]) {
+  for (const slot of FLAT_SLOTS) {
     const slug = params.get(slot);
     if (!slug) continue;
     const texture = manifest.textures.find((t) => t.slug === slug);

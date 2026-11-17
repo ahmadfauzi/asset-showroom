@@ -1,0 +1,53 @@
+{
+  "living": {
+    "name": "Living room",
+    "slots": [
+      "floor",
+      "walls",
+      "featureWall",
+      "slatWall",
+      "upholstery",
+      "accents",
+      "rugs",
+      "woodwork"
+    ],
+    "models": []
+  },
+  "bedroom": {
+    "name": "Bedroom",
+    "slots": [
+      "floor",
+      "walls",
+      "featureWall",
+      "bedding",
+      "accents",
+      "rugs",
+      "woodwork"
+    ],
+    "models": []
+  },
+  "bathroom": {
+    "name": "Bathroom",
+    "slots": [
+      "floor",
+      "walls",
+      "showerWall",
+      "vanity",
+      "countertop",
+      "towels"
+    ],
+    "models": []
+  },
+  "garden": {
+    "name": "Garden",
+    "slots": [
+      "ground",
+      "path",
+      "deck",
+      "fence",
+      "rocks",
+      "cushions"
+    ],
+    "models": []
+  }
+}

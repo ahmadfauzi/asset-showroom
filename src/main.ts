@@ -435,7 +435,7 @@ if (!gl) {
   // The room opens as the link describes, with defaults for anything the link leaves out (PRD 6.8).
   const link = fromHash(location.hash);
   if (link.time !== undefined) daylight.setTime(link.time);
-  const defaults = Object.entries({ ...manifest.defaults, ...link.textures }).flatMap(([slot, slug]) => {
+  const defaults = Object.entries({ ...manifest.defaults.living, bedding: manifest.defaults.bedroom.bedding, ...link.textures }).flatMap(([slot, slug]) => {
     const texture = manifest.textures.find((t) => t.slug === slug);
     return texture && slot in materials ? [applyTexture(slot as Slot, texture)] : [];
   });

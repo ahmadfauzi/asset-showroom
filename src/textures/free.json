@@ -1,15 +1,24 @@
 {
   "set": "free",
   "defaults": {
-    "floor": "ash-wood-board",
-    "featureWall": "denali-quartzite",
-    "walls": "painted-plaster",
-    "slatWall": "ash-wood-board",
-    "upholstery": "boucle-bubbly-rows",
-    "accents": "boucle-bubbly-rows",
-    "bedding": "boucle-bubbly-rows",
-    "rugs": "boucle-bubbly-rows",
-    "woodwork": "ash-wood-board"
+    "living": {
+      "floor": "ash-wood-board",
+      "featureWall": "denali-quartzite",
+      "walls": "painted-plaster",
+      "slatWall": "ash-wood-board",
+      "upholstery": "boucle-bubbly-rows",
+      "accents": "boucle-bubbly-rows",
+      "rugs": "boucle-bubbly-rows",
+      "woodwork": "ash-wood-board"
+    },
+    "bedroom": {
+      "floor": "ash-wood-board",
+      "featureWall": "denali-quartzite",
+      "bedding": "boucle-bubbly-rows",
+      "woodwork": "ash-wood-board"
+    },
+    "bathroom": {},
+    "garden": {}
   },
   "textures": [
     {

@@ -1,9 +1,13 @@
 import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { TextureInfo } from '@manifest';
+import rooms from './rooms.json';
 import slots from './textures/slots.json';
 
 export type Slot = keyof typeof slots;
+
+// The v1 flat shows the Living room's surfaces plus bedding, because it still has a bed. Task 3 replaces this.
+export const FLAT_SLOTS = [...rooms.living.slots, 'bedding'] as Slot[];
 
 export const accepts = (slot: Slot, category: TextureInfo['category']) => (slots[slot] as string[]).includes(category);
 
@@ -17,6 +21,16 @@ export const SLOT_NAMES: Record<Slot, string> = {
   bedding: 'Bedding',
   rugs: 'Rugs',
   woodwork: 'Woodwork',
+  showerWall: 'Shower wall',
+  vanity: 'Vanity',
+  countertop: 'Countertop',
+  towels: 'Towels',
+  ground: 'Ground',
+  path: 'Path',
+  deck: 'Deck',
+  fence: 'Fence',
+  rocks: 'Rocks',
+  cushions: 'Cushions',
 };
 
 // Shown until a slot has a texture.
@@ -30,6 +44,16 @@ export const PLACEHOLDER: Record<Slot, string> = {
   bedding: '#ecebe6',
   rugs: '#a39b8f',
   woodwork: '#7a5a40',
+  showerWall: '#d6d8d6',
+  vanity: '#8b6a4b',
+  countertop: '#cfcac2',
+  towels: '#e7e2d8',
+  ground: '#7c8f5a',
+  path: '#a9a59d',
+  deck: '#9b7a58',
+  fence: '#7d6249',
+  rocks: '#8f8c86',
+  cushions: '#b8a690',
 };
 
 const H = 2.7; // wall height in metres
