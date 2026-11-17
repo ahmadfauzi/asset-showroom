@@ -193,11 +193,28 @@ test('a texture that loads after a switch stays on its own room', async ({ page 
 
 test('the last room clicked wins', async ({ page }) => {
   await open(page);
-  await room(page, 'Bedroom').click();
-  await room(page, 'Living room').click();                              // straight away, during the switch
-  await expect.poll(() => hash(page)).toContain('room=living');
-  await expect(slot(page, 'Slat wall')).toBeVisible();
+  // Records every hash the app writes, so the test can tell if the Bedroom ever showed.
+  await page.evaluate(() => {
+    const written: string[] = ((window as any).hashesWritten = []);
+    const replace = history.replaceState.bind(history);
+    history.replaceState = (data, unused, url) => {
+      written.push(String(url));
+      replace(data, unused, url);
+    };
+  });
+  // Both clicks run in one go in the page. Two Playwright clicks can land more than the 250 ms fade apart on a
+  // slow machine, and then the first switch has already finished.
+  await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('#rooms button')];
+    for (const name of ['Bedroom', 'Bathroom']) buttons.find((button) => button.textContent === name)!.click();
+  });
+  await expect(page.locator('#fade')).not.toHaveClass(/on/);
+  await expect.poll(() => hash(page)).toContain('room=bathroom');
+  await expect(page.locator('#rooms button[aria-pressed="true"]')).toHaveText(['Bathroom']);
+  await expect(slot(page, 'Shower wall')).toBeVisible();
   await expect(slot(page, 'Bedding')).toHaveCount(0);
+  const written: string[] = await page.evaluate(() => (window as any).hashesWritten);
+  expect(written.filter((url) => url.includes('room=bedroom'))).toEqual([]);
 });
 
 test('default room screenshot, fixture set', async ({ page }) => {
