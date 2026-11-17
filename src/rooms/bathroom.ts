@@ -1,9 +1,6 @@
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { BuiltRoom } from './index';
-import { basin, bathtub, box, ceramic, cylinder, glass, H, metal, plinth, roomKit, shade, showerScreen, soft, toilet, towel, view, type Part } from './parts';
-
-// Raises or lowers parts, for pieces that hang on a wall.
-const lift = (parts: Part[], y: number): Part[] => parts.map(([g, m]) => [g.translate(0, y, 0), m]);
+import { basin, bathtub, box, ceramic, cylinder, glass, H, metal, plinth, roomKit, shade, showerScreen, soft, toilet, towel, view } from './parts';
 
 // Bathroom, 4 × 3.5 m. The front (+z) and right (+x) sides are open. The shower is in the back left corner, the bath
 // runs along the left wall under a window, and the toilet and vanity are on the back wall.
@@ -49,21 +46,23 @@ export function buildBathroom(ktx2: KTX2Loader): BuiltRoom {
         soft('vanity', 0.7, 0.66, 0.02, side * 0.36, 0.11, 0.285, 0.008),
         soft(metal, 0.015, 0.14, 0.015, side * 0.08, 0.4, 0.31, 0.006),
       ]),
-      soft('countertop', 1.5, 0.04, 0.56, 0, 0.8, 0.01, 0.01),
+      soft('countertop', 1.5, 0.04, 0.56, 0, 0.8, 0.01, 0.012, 1),
     ],
     1.175,
     -1.465,
   );
-  add(lift(basin(), 0.84), 1.175, -1.35);
-  add([soft(metal, 0.05, 0.28, 0.03, 0, 1.94, -0.27), cylinder(shade, 0.07, 0.26, 0, 1.95, -0.185)], 1.175, -1.475);
+  add(basin(0.84), 1.175, -1.42);
+  add([soft(metal, 0.05, 0.28, 0.03, 0, 2.14, -0.27), cylinder(shade, 0.07, 0.26, 0, 2.15, -0.185)], 1.175, -1.475);
 
   // A towel rail above the toilet with two towels.
   add([soft(metal, 1, 0.022, 0.022, 0, 1.539, 0)], -0.2, -1.67);
   for (const x of [-0.65, 0.25]) add([soft(metal, 0.02, 0.03, 0.09, 0, 1.535, 0)], x, -1.705);
-  for (const x of [-0.42, 0.02]) add(lift(towel(0.42, 0.65), 0.9), x, -1.67);
+  for (const x of [-0.42, 0.02]) add(towel(0.42, 0.65, 0.9), x, -1.67);
 
-  // The Poly Haven mirror over the basin. Its origin is the middle of the frame, with its back on the wall.
-  place('ornate_mirror_01', 1.175, 1.55, -1.745);
+  // The Poly Haven mirror over the basin, scaled up from 0.49 × 0.74 m. Its origin is the middle of the frame, with
+  // its back on the wall.
+  place('ornate_mirror_01', 1.175, 1.6, -1.745, { scale: 1.35 });
 
-  return room.finish(3, view([3.7, 3.9, 4.8], 4, 11));
+  // The wall lamp is close to the wall, so its light is dimmer than in the other rooms.
+  return room.finish(3, view([3.7, 3.9, 4.8], 4, 11), false, 4);
 }

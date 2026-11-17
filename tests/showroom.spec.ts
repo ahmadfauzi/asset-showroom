@@ -273,16 +273,17 @@ test('night in the garden lights the path lights', async ({ page }) => {
 });
 
 test('leaving the garden removes the sky and the stars', async ({ page }) => {
+  // The sky shows as a background texture. Indoors the environment stays, as the generated room.
   const sky = () =>
     page.evaluate(() => {
       const { scene } = (window as any).showroom;
-      return { environment: scene.environment !== null, stars: scene.children.some((c: any) => c.isPoints) };
+      return { sky: scene.background?.isTexture === true, environment: scene.environment !== null, stars: scene.children.some((c: any) => c.isPoints) };
     });
   const errors = await open(page, '#v=2&room=garden&t=21');
-  await expect.poll(sky).toEqual({ environment: true, stars: true });
+  await expect.poll(sky).toEqual({ sky: true, environment: true, stars: true });
   await room(page, 'Living room').click();
   await expect.poll(() => hash(page)).toContain('room=living');
-  await expect.poll(sky).toEqual({ environment: false, stars: false });
+  await expect.poll(sky).toEqual({ sky: false, environment: true, stars: false });
   expect(errors).toEqual([]);
 });
 
@@ -327,20 +328,22 @@ test('the snow switch works on a narrow screen', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('default room screenshot, fixture set', async ({ page }) => {
-  await open(page);
-  // GTAO may switch itself off part-way through on a slow machine, so turn it off for a steady picture.
-  // Page screenshots hang on the WebGL canvas in headless Chromium, so this uses Save picture, which renders
-  // one frame without the HUD and downloads it.
-  await page.evaluate(() => {
-    (window as unknown as { showroom: { gtao: { enabled: boolean } } }).showroom.gtao.enabled = false;
+for (const key of ['living', 'bedroom', 'bathroom', 'garden']) {
+  test(`${key} screenshot, fixture set`, async ({ page }) => {
+    await open(page, `#v=2&room=${key}`);
+    // GTAO may switch itself off part-way through on a slow machine, so turn it off for a steady picture.
+    // Page screenshots hang on the WebGL canvas in headless Chromium, so this uses Save picture, which renders
+    // one frame without the HUD and downloads it.
+    await page.evaluate(() => {
+      (window as unknown as { showroom: { gtao: { enabled: boolean } } }).showroom.gtao.enabled = false;
+    });
+    await page.waitForTimeout(1000);
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#toolbar [data-action="save"]').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^asset-showroom-\d{4}-\d{2}-\d{2}\.png$/);
+    const picture = readFileSync(await download.path());
+    expect(picture).toMatchSnapshot(`${key}-fixture.png`, { maxDiffPixelRatio: 0.02 });
   });
-  await page.waitForTimeout(1000);
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator('#toolbar [data-action="save"]').click(),
-  ]);
-  expect(download.suggestedFilename()).toMatch(/^asset-showroom-\d{4}-\d{2}-\d{2}\.png$/);
-  const picture = readFileSync(await download.path());
-  expect(picture).toMatchSnapshot('default-room-fixture.png', { maxDiffPixelRatio: 0.02 });
-});
+}

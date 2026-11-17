@@ -1,7 +1,7 @@
 import { MeshStandardMaterial } from 'three';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { BuiltRoom } from './index';
-import { box, cylinder, merge, metal, plinth, roomKit, shade, soft, view, type Part } from './parts';
+import { box, cushion, cylinder, merge, metal, plinth, roomKit, shade, soft, view, type Part } from './parts';
 
 // The house wall and its door and window. They are not surfaces you can retexture.
 const render = new MeshStandardMaterial({ color: '#d9d3c7', roughness: 0.9 });
@@ -12,12 +12,12 @@ const windowGlass = new MeshStandardMaterial({ color: '#27313b', roughness: 0.05
 
 const DECK = 0.18; // height of the deck's top
 
-// A low fence along z at x: a post every 2 m, three boards and a cap.
+// A low fence along z at x: a post every 2 m, three boards and a cap, with bevelled edges.
 const fence = (x: number): Part[] => [
   merge([
-    ...[-3.95, -2, 0, 2, 3.95].map((z) => box('fence', x - 0.05, x + 0.05, 0, 1, z - 0.05, z + 0.05)),
-    ...[0.15, 0.45, 0.75].map((y) => box('fence', x - 0.03, x + 0.03, y, y + 0.2, -4, 4)),
-    box('fence', x - 0.07, x + 0.07, 1, 1.04, -4, 4),
+    ...[-3.95, -2, 0, 2, 3.95].map((z) => box('fence', x - 0.05, x + 0.05, 0, 1, z - 0.05, z + 0.05, 0.008)),
+    ...[0.15, 0.45, 0.75].map((y) => box('fence', x - 0.03, x + 0.03, y, y + 0.2, -4, 4, 0.006)),
+    box('fence', x - 0.07, x + 0.07, 1, 1.04, -4, 4, 0.01),
   ]),
 ];
 
@@ -51,15 +51,15 @@ export function buildGarden(ktx2: KTX2Loader): BuiltRoom {
   // Deck: a frame with boards along x and a step down to the path.
   add([
     box('deck', -5.6, -0.4, 0, DECK - 0.04, -3.98, -1.62),
-    merge(Array.from({ length: 16 }, (_, i) => box('deck', -5.6, -0.4, DECK - 0.04, DECK, -3.98 + i * 0.148, -3.98 + i * 0.148 + 0.138))),
+    merge(Array.from({ length: 16 }, (_, i) => box('deck', -5.6, -0.4, DECK - 0.04, DECK, -3.98 + i * 0.148, -3.98 + i * 0.148 + 0.138, 0.005))),
     box('deck', -2.5, -1.2, 0, 0.09, -1.62, -1.3),
   ]);
 
-  // Stone path: two rows of slabs from the step to the front edge.
+  // Stone path: two rows of slabs from the step to the front edge, ending 6 cm inside it.
   add([
     merge(
       Array.from({ length: 9 }, (_, row) =>
-        [-2.45, -1.83].map((x) => box('path', x, x + 0.58, 0, 0.03, -1.24 + row * 0.6, -1.24 + row * 0.6 + 0.56)),
+        [-2.45, -1.83].map((x) => box('path', x, x + 0.58, 0, 0.03, -1.24 + row * 0.58, -1.24 + row * 0.58 + 0.54, 0.01)),
       ).flat(),
     ),
   ]);
@@ -74,14 +74,14 @@ export function buildGarden(ktx2: KTX2Loader): BuiltRoom {
   // at 0.39 m, turned the same as each chair in the model.
   const table = { x: -4.2, z: -2.75, rotY: Math.PI / 2 };
   place('outdoor_table_chair_set_01', table.x, DECK, table.z, { rotY: table.rotY });
-  const pads = [[-0.011, 0.464, 0.243], [-0.084, -0.39, 0.269]].map(([x, z, turn]): Part => {
-    const [geometry, material] = soft('cushions', 0.4, 0.05, 0.36, 0, DECK + 0.39, 0, 0.02);
+  const pads = [[-0.011, 0.464, 0.243], [-0.084, -0.39, 0.269]].map(([x, z, turn], i): Part => {
+    const [geometry, material] = cushion('cushions', 0.4, 0.05, 0.36, 0, DECK + 0.39, 0, 0.4, i, 0.025);
     return [geometry.rotateY(turn).translate(x, 0, z), material];
   });
   add(pads, table.x, table.z, table.rotY);
 
-  // Rocks on the lawn are the Rocks surface. A row of shrubs along the left fence, and a planter with small
-  // plants under the window.
+  // Rocks on the lawn are the Rocks surface. A shrub by the left fence, and a planter with small plants under the
+  // window.
   place('rock_07', 3.4, 0, 1.6, { scale: 3, rotY: 0.6, slot: 'rocks' });
   place('rock_09', 4.3, 0, 2.3, { scale: 6, rotY: 2.1, slot: 'rocks' });
   place('shrub_02', -5.2, 0, 0.5, { scale: 0.75, rotY: -Math.PI / 2 });

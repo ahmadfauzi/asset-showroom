@@ -1,10 +1,11 @@
 import {
-  ACESFilmicToneMapping,
   Box3,
   Color,
   MathUtils,
   Mesh,
   MeshStandardMaterial,
+  NeutralToneMapping,
+  PCFShadowMap,
   PerspectiveCamera,
   Raycaster,
   RepeatWrapping,
@@ -56,8 +57,13 @@ if (!gl) {
   document.getElementById('no-webgl')!.style.display = 'block';
 } else {
   const renderer = new WebGLRenderer({ canvas, context: gl });
-  renderer.toneMapping = ACESFilmicToneMapping;
+  // Neutral keeps the textures' own colours: whites stay white and wood stays brown (ACES shifts them toward
+  // orange, AgX greys them). It is a little darker than ACES, so the exposure keeps the v1 brightness.
+  renderer.toneMapping = NeutralToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  // PCF with a shadow radius gives soft edges. PCFSoftShadowMap is deprecated in three.js 0.183 and falls back to it.
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFShadowMap;
 
   const scene = new Scene();
   scene.background = new Color('#16161a');
