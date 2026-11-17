@@ -240,7 +240,8 @@ test('the garden has its surfaces and the Ground tab', async ({ page }) => {
   const models = GARDEN_MODELS.map((id) =>
     page.waitForResponse((response) => response.url().endsWith(`/models/${id}.glb`) && response.ok(), { timeout: 20_000 }),
   );
-  await open(page, '#v=2&room=garden');
+  // The errors catch a shader that fails to compile, such as the triplanar patch on the rocks or the Sky.
+  const errors = await open(page, '#v=2&room=garden');
   await Promise.all(models);
   await expect(page.locator('#toast')).not.toContainText("Couldn't load");
   for (const name of ['Ground', 'Path', 'Deck', 'Fence', 'Rocks', 'Cushions']) await expect(slot(page, name)).toBeVisible();
@@ -249,12 +250,40 @@ test('the garden has its surfaces and the Ground tab', async ({ page }) => {
   await expect(tab(page, 'Wood')).toBeDisabled();
   await page.getByRole('button', { name: 'Snow Fixture' }).click();
   await expect.poll(() => hash(page)).toContain('ground=snow-fixture');
+
+  // The rock models are the Rocks surface.
+  const rocks = await page.evaluate(() => {
+    let count = 0;
+    (window as any).showroom.scene.traverse((object: any) => object.isMesh && object.userData.slot === 'rocks' && count++);
+    return count;
+  });
+  expect(rocks).toBeGreaterThan(0);
+  await slot(page, 'Rocks').click();
+  await tab(page, 'Stone and tiles').click();
+  await page.getByRole('button', { name: 'Marble Fixture' }).click();
+  await expect.poll(() => hash(page)).toContain('rocks=marble-fixture');
+  expect(errors).toEqual([]);
 });
 
 test('night in the garden lights the path lights', async ({ page }) => {
-  await open(page, '#v=2&room=garden&t=21');
+  const errors = await open(page, '#v=2&room=garden&t=21');
   const lit = await page.evaluate(() => (window as any).showroom.scene.children.filter((c: any) => c.isPointLight && c.intensity > 0).length);
   expect(lit).toBeGreaterThanOrEqual(4);
+  expect(errors).toEqual([]);
+});
+
+test('leaving the garden removes the sky and the stars', async ({ page }) => {
+  const sky = () =>
+    page.evaluate(() => {
+      const { scene } = (window as any).showroom;
+      return { environment: scene.environment !== null, stars: scene.children.some((c: any) => c.isPoints) };
+    });
+  const errors = await open(page, '#v=2&room=garden&t=21');
+  await expect.poll(sky).toEqual({ environment: true, stars: true });
+  await room(page, 'Living room').click();
+  await expect.poll(() => hash(page)).toContain('room=living');
+  await expect.poll(sky).toEqual({ environment: false, stars: false });
+  expect(errors).toEqual([]);
 });
 
 test('default room screenshot, fixture set', async ({ page }) => {
