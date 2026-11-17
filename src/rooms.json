@@ -48,6 +48,6 @@
       "rocks",
       "cushions"
     ],
-    "models": []
+    "models": ["rock_07", "rock_09", "shrub_02", "shrub_03", "planter_box_01", "outdoor_table_chair_set_01"]
   }
 }

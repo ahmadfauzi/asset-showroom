@@ -1,10 +1,10 @@
 import type { Group, MeshStandardMaterial, Vector3 } from 'three';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
-import { ROOMS, type RoomKey, type Slot } from '../room';
+import type { RoomKey, Slot } from '../room';
 import { buildBathroom } from './bathroom';
 import { buildBedroom } from './bedroom';
+import { buildGarden } from './garden';
 import { buildLiving } from './living';
-import { box, H, plinth, roomKit, soft, view } from './parts';
 
 export type BuiltRoom = {
   key: RoomKey;
@@ -23,23 +23,5 @@ export function buildRoom(key: RoomKey, ktx2: KTX2Loader): BuiltRoom {
   if (key === 'living') return buildLiving(ktx2);
   if (key === 'bedroom') return buildBedroom(ktx2);
   if (key === 'bathroom') return buildBathroom(ktx2);
-  return placeholder(key, ktx2);
-}
-
-// The Garden until it is built: a plinth with the floor or ground as one panel,
-// wall-type surfaces as panels along the back and the rest as small boxes.
-const WALL_TYPES: Slot[] = ['walls', 'showerWall', 'fence'];
-
-function placeholder(key: RoomKey, ktx2: KTX2Loader): BuiltRoom {
-  const room = roomKit(key, ktx2);
-  const [base, ...rest] = ROOMS[key].slots as Slot[];
-  const walls = rest.filter((slot) => WALL_TYPES.includes(slot));
-  const others = rest.filter((slot) => !WALL_TYPES.includes(slot));
-  room.add([box(plinth, -2.4, 2.4, -0.65, -0.05, -2.4, 2.4), box(base, -2, 2, -0.05, 0, -2, 2)]);
-  walls.forEach((slot, i) => {
-    const width = 4 / walls.length;
-    room.add([box(slot, -2 + i * width, -2 + (i + 1) * width, 0, H, -2.15, -2)]);
-  });
-  others.forEach((slot, i) => room.add([soft(slot, 0.5, 0.5, 0.5, (i - (others.length - 1) / 2) * 0.9, 0, 0)]));
-  return room.finish(4, view([5, 4.6, 6.5], 4, 14), key === 'garden');
+  return buildGarden(ktx2);
 }

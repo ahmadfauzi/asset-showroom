@@ -234,6 +234,29 @@ test('the bathroom has its six surfaces and its mirror', async ({ page }) => {
   await expect(page.locator('#toast')).not.toContainText("Couldn't load");
 });
 
+const GARDEN_MODELS = ['rock_07', 'rock_09', 'shrub_02', 'shrub_03', 'planter_box_01', 'outdoor_table_chair_set_01'];
+
+test('the garden has its surfaces and the Ground tab', async ({ page }) => {
+  const models = GARDEN_MODELS.map((id) =>
+    page.waitForResponse((response) => response.url().endsWith(`/models/${id}.glb`) && response.ok(), { timeout: 20_000 }),
+  );
+  await open(page, '#v=2&room=garden');
+  await Promise.all(models);
+  await expect(page.locator('#toast')).not.toContainText("Couldn't load");
+  for (const name of ['Ground', 'Path', 'Deck', 'Fence', 'Rocks', 'Cushions']) await expect(slot(page, name)).toBeVisible();
+  await slot(page, 'Ground').click();
+  await expect(tab(page, 'Ground')).toHaveAttribute('aria-pressed', 'true');
+  await expect(tab(page, 'Wood')).toBeDisabled();
+  await page.getByRole('button', { name: 'Snow Fixture' }).click();
+  await expect.poll(() => hash(page)).toContain('ground=snow-fixture');
+});
+
+test('night in the garden lights the path lights', async ({ page }) => {
+  await open(page, '#v=2&room=garden&t=21');
+  const lit = await page.evaluate(() => (window as any).showroom.scene.children.filter((c: any) => c.isPointLight && c.intensity > 0).length);
+  expect(lit).toBeGreaterThanOrEqual(4);
+});
+
 test('default room screenshot, fixture set', async ({ page }) => {
   await open(page);
   // GTAO may switch itself off part-way through on a slow machine, so turn it off for a steady picture.

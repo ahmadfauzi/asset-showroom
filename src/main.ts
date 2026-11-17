@@ -74,7 +74,7 @@ if (!gl) {
 
   // OrbitControls zooms in steps, so the wheel sets a target distance and the loop eases towards it.
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const daylight = createDaylight(scene, reducedMotion, () => commit());
+  const daylight = createDaylight(scene, renderer, reducedMotion, () => commit());
   const ease = reducedMotion ? 1 : 0.12;
   let distance = 0;
   canvas.addEventListener(
@@ -255,7 +255,7 @@ if (!gl) {
   composer.addPass(gtao);
   // The Playwright tests read the camera and the room's materials, and switch GTAO off for steady screenshots.
   if (manifest.set === 'fixture') {
-    Object.assign(window, { showroom: { camera, gtao, renderer, materials: () => active.built.materials } });
+    Object.assign(window, { showroom: { camera, gtao, renderer, scene, materials: () => active.built.materials } });
   }
   composer.addPass(new UnrealBloomPass(new Vector2(), 0.2, 0.4, 0.9));
   composer.addPass(outline);
@@ -365,10 +365,14 @@ if (!gl) {
       ).length();
 
       const radius = { value: 0 };
-      const material = built.materials[slot]!.clone();
+      // The clone keeps the slot's own shader patch, such as triplanar mapping on the rocks, under this one.
+      const source = built.materials[slot]!;
+      const material = source.clone();
       apply(material, maps);
       Object.assign(material, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-      material.onBeforeCompile = (shader) => {
+      material.customProgramCacheKey = () => `spread ${source.customProgramCacheKey()}`;
+      material.onBeforeCompile = (shader, renderer) => {
+        source.onBeforeCompile.call(material, shader, renderer);
         shader.uniforms.spreadCenter = { value: center };
         shader.uniforms.spreadRadius = radius;
         shader.vertexShader = shader.vertexShader
@@ -386,6 +390,7 @@ if (!gl) {
       };
       const overlays = meshes.map((mesh) => {
         const overlay = new Mesh(mesh.geometry, material);
+        overlay.applyMatrix4(mesh.matrix); // models placed as a surface keep their own position, turn and scale
         overlay.receiveShadow = true;
         overlay.raycast = () => {};
         return overlay;

@@ -1,8 +1,10 @@
 import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Group, LatheGeometry, Mesh, MeshStandardMaterial, Vector2, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { loadModel } from '../models';
 import { PLACEHOLDER, ROOMS, type RoomKey, type Slot } from '../room';
+import { triplanar } from '../triplanar';
 import type { BuiltRoom } from './index';
 
 export const H = 2.7; // wall height in metres
@@ -50,6 +52,9 @@ function metreUVs(geometry: BufferGeometry) {
   }
   uv.needsUpdate = true;
 }
+
+// One mesh from several parts of the same surface, for pieces with many boards, such as a deck or fence.
+export const merge = (parts: Part[]): Part => [mergeGeometries(parts.map(([geometry]) => geometry)), parts[0][1]];
 
 // Furniture is built facing +z around a local origin.
 export const sofa = (w: number): Part[] => [
@@ -155,15 +160,29 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
   };
 
   // Puts a Poly Haven model with the middle of its base at (x, y, z). A model that fails to load is left out.
+  // A model given a slot, such as a rock, becomes that surface: its meshes take the slot's material with
+  // triplanar mapping, and move up to be children of the group, as the code-built surfaces are.
   const loading: Promise<void>[] = [];
   const failed: string[] = [];
-  const place = (id: string, x: number, y: number, z: number, rotY = 0) => {
+  const place = (id: string, x: number, y: number, z: number, { rotY = 0, scale = 1, slot }: { rotY?: number; scale?: number; slot?: Slot } = {}) => {
     loading.push(
       loadModel(id, ktx2).then(
         (model) => {
           model.position.set(x, y, z);
           model.rotation.y = rotY;
-          group.add(model);
+          model.scale.setScalar(scale);
+          if (!slot) return void group.add(model);
+          const surface = materials[slot];
+          if (!surface) throw new Error(`The ${key} room has no ${slot} surface.`);
+          triplanar(surface);
+          model.updateMatrixWorld(true);
+          const meshes: Mesh[] = [];
+          model.traverse((object) => (object as Mesh).isMesh && meshes.push(object as Mesh));
+          for (const mesh of meshes) {
+            group.attach(mesh);
+            mesh.material = surface;
+            mesh.userData.slot = slot;
+          }
         },
         (error) => {
           console.warn(error);

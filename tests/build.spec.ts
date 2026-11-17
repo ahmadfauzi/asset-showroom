@@ -82,7 +82,9 @@ test.describe('set isolation', () => {
   test('dist/models holds the room models', () => {
     const run = build();
     expect(run.status, run.stderr).toBe(0);
-    expect(readdirSync(join(outDir, 'models'))).toEqual(['ornate_mirror_01.glb', 'potted_plant_04.glb']);
+    expect(readdirSync(join(outDir, 'models')).sort()).toEqual(
+      ['ornate_mirror_01', 'outdoor_table_chair_set_01', 'planter_box_01', 'potted_plant_04', 'rock_07', 'rock_09', 'shrub_02', 'shrub_03'].map((id) => `${id}.glb`),
+    );
   });
 
   test('the build fails when a room model has no built file', () => {
