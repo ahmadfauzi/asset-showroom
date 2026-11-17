@@ -1,6 +1,5 @@
 declare module '@manifest' {
-  import type { Slot } from './room';
-  export type RoomKey = 'living' | 'bedroom' | 'bathroom' | 'garden';
+  import type { RoomKey, Slot } from './room';
   export type TextureInfo = {
     slug: string;
     name: string;
@@ -10,7 +9,7 @@ declare module '@manifest' {
   };
   const manifest: {
     set: 'free' | 'premium' | 'fixture';
-    defaults: Record<RoomKey, Partial<Record<Slot, string>>>;
+    defaults: Partial<Record<RoomKey, Partial<Record<Slot, string>>>>;
     textures: TextureInfo[];
   };
   export default manifest;

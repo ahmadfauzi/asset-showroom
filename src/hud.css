@@ -34,13 +34,56 @@ input:focus-visible {
   font-weight: 600;
 }
 
-#slots {
+/* Room switcher (PRD 15.6). Plain for now. */
+#rooms {
   position: fixed;
   top: 52px;
   left: 16px;
   width: 220px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+#rooms button {
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#rooms button:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
+#rooms button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: rgb(95 179 255 / 0.12);
+}
+
+/* Covers the room while it switches. main.ts waits the same 0.25 s before it swaps the room. */
+#fade {
+  position: fixed;
+  inset: 0;
+  background: #16161a;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+#fade.on {
+  opacity: 1;
+}
+
+#slots {
+  position: fixed;
+  top: 126px;
+  left: 16px;
+  width: 220px;
   padding: 8px;
-  max-height: calc(100vh - 68px);
+  max-height: calc(100vh - 142px);
   overflow-y: auto;
   box-sizing: border-box;
 }
@@ -203,7 +246,7 @@ input:focus-visible {
   background: rgb(255 255 255 / 0.08);
 }
 
-body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
+body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip) {
   display: none;
 }
 
@@ -421,8 +464,22 @@ body.hud-hidden :is(#title, #toolbar, #slots, #daylight, #tray, #tooltip) {
     font-size: 12px;
   }
 
+  #rooms {
+    top: 52px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  #rooms button {
+    padding: 5px 7px;
+    font-size: 12px;
+  }
+
   #toast {
-    top: 56px;
+    top: 100px;
     width: max-content;
     max-width: calc(100vw - 32px);
   }

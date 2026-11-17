@@ -27,6 +27,8 @@ test('state: v2 round trip, v1 links, bad values', async ({ page }) => {
       v2: s.fromHash('#v=2&room=bathroom&towels=velvet-fixture&ground=grass-fixture&snow=1&t=9'),
       attic: s.fromHash('#v=2&room=attic&floor=nope&t=30'),
       snowIndoors: s.toHash('living', { textures: {}, time: 12, snow: true }),
+      gardenSnow: s.fromHash('#v=2&room=garden&snow=1'),
+      wrongCategory: s.fromHash('#v=2&room=living&floor=linen-fixture'),
     };
   });
   expect(r.hash).toBe('#v=2&room=garden&ground=grass-fixture&t=18.5&snow=1');
@@ -34,4 +36,6 @@ test('state: v2 round trip, v1 links, bad values', async ({ page }) => {
   expect(r.v2).toEqual({ room: 'bathroom', textures: { towels: 'velvet-fixture' }, time: 9, snow: false, missing: 0 });
   expect(r.attic).toEqual({ room: 'living', textures: {}, snow: false, missing: 1 });
   expect(r.snowIndoors).toBe('#v=2&room=living&t=12');
+  expect(r.gardenSnow).toEqual({ room: 'garden', textures: {}, snow: true, missing: 0 });
+  expect(r.wrongCategory).toEqual({ room: 'living', textures: {}, snow: false, missing: 0 });
 });

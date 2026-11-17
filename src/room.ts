@@ -8,9 +8,6 @@ export type RoomKey = keyof typeof rooms;
 export const ROOMS = rooms;
 export const isRoom = (value: string): value is RoomKey => Object.hasOwn(rooms, value);
 
-// The v1 flat shows the Living room's surfaces plus bedding, because it still has a bed. Task 4 replaces this.
-export const FLAT_SLOTS = [...rooms.living.slots, 'bedding'] as Slot[];
-
 export const accepts = (slot: Slot, category: TextureInfo['category']) => (slots[slot] as string[]).includes(category);
 
 export const SLOT_NAMES: Record<Slot, string> = {

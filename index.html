@@ -29,7 +29,9 @@
   <body>
     <p id="no-webgl">This page needs WebGL2, and your browser doesn't support it. Try the latest Chrome, Edge, Safari or Firefox.</p>
     <canvas id="scene" aria-label="The room. Drag to turn it, scroll to zoom, click a surface to select it."></canvas>
+    <div id="fade"></div>
     <h1 id="title">Asset Showroom</h1>
+    <nav id="rooms" class="panel" aria-label="Rooms"></nav>
     <aside id="slots" class="panel" aria-label="Surfaces">
       <div id="slot-list"></div>
       <section id="card" hidden>
@@ -52,6 +54,8 @@
     <dialog id="help" aria-labelledby="help-title">
       <h2 id="help-title">How the showroom works</h2>
       <p>Try textures on the surfaces of a room and see how they look in different light.</p>
+      <h3>Switch rooms</h3>
+      <p>Use the room buttons to switch rooms. Each room keeps its own textures, time of day and undo history while this page is open.</p>
       <h3>Apply a texture</h3>
       <p>Pick a surface in the list on the left, or click it in the room. Then click a texture in the tray at the bottom. You can also drag a texture straight onto a surface.</p>
       <h3>Change the light</h3>
@@ -59,7 +63,7 @@
       <h3>Move around</h3>
       <p>Drag to turn the room and scroll to zoom.</p>
       <h3>Share the room</h3>
-      <p>Copy link puts the room in the link. Anyone who opens it sees the same textures and time of day.</p>
+      <p>Copy link puts this room in the link. Anyone who opens it sees the same room, textures and time of day.</p>
       <h3>Keys</h3>
       <table>
         <tr><td><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>

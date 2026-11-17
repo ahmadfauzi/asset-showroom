@@ -3,11 +3,10 @@ import {
   DirectionalLight,
   HemisphereLight,
   MathUtils,
-  MeshStandardMaterial,
   PointLight,
   Scene,
-  Vector3,
 } from 'three';
+import type { BuiltRoom } from './rooms/index';
 
 const SUNRISE = 6;
 const SUNSET = 20;
@@ -26,27 +25,18 @@ const format = (hours: number) => {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 };
 
-// Sun, sky fill, lamps and the daylight panel (PRD 6.5).
-export function createDaylight(
-  scene: Scene,
-  room: { glass: MeshStandardMaterial; shade: MeshStandardMaterial; lamps: Vector3[] },
-  reducedMotion: boolean,
-  onUserChange: () => void,
-) {
+// Sun, sky fill, lamps and the daylight panel (PRD 6.5). setRoom points them at the room that shows.
+export function createDaylight(scene: Scene, reducedMotion: boolean, onUserChange: () => void) {
   const sky = new HemisphereLight(daySky, '#5a4f45', 1.2);
   const sun = new DirectionalLight(noonSun, 3);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 40 });
+  Object.assign(sun.shadow.camera, { near: 1, far: 40 });
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.02;
-  const lamps = room.lamps.map((position) => {
-    const light = new PointLight('#ffcf8a', 0, 7, 2);
-    light.position.copy(position);
-    return light;
-  });
-  scene.add(sky, sun, ...lamps);
-  room.shade.emissive.set('#ffd59a');
+  scene.add(sky, sun);
+  let room: BuiltRoom | null = null;
+  let lamps: PointLight[] = [];
 
   const clock = document.querySelector<HTMLElement>('#daylight .clock')!;
   const slider = document.querySelector<HTMLInputElement>('#daylight input')!;
@@ -87,9 +77,11 @@ export function createDaylight(
     // After sunset the lamps come on and the windows go dark.
     const lampsOn = MathUtils.smoothstep(time, SUNSET - 0.5, SUNSET + 0.5);
     for (const lamp of lamps) lamp.intensity = 8 * lampsOn;
-    room.shade.emissiveIntensity = 2 * lampsOn;
-    room.glass.color.copy(nightGlass).lerp(dayGlass, light);
-    room.glass.emissiveIntensity = 0.4 * light;
+    if (room) room.shade.emissiveIntensity = 2 * lampsOn;
+    if (room?.glass) {
+      room.glass.color.copy(nightGlass).lerp(dayGlass, light);
+      room.glass.emissiveIntensity = 0.4 * light;
+    }
 
     clock.textContent = format(time);
     slider.value = String(time);
@@ -126,6 +118,21 @@ export function createDaylight(
     setTime(hours: number) {
       tween = null;
       setTime(hours);
+    },
+    // Moves the lamps, shadow area, glass and shades to this room, at the current time.
+    setRoom(next: BuiltRoom) {
+      for (const lamp of lamps) scene.remove(lamp);
+      lamps = next.lamps.map((position) => {
+        const light = new PointLight('#ffcf8a', 0, 7, 2);
+        light.position.copy(position);
+        scene.add(light);
+        return light;
+      });
+      const e = next.extent;
+      Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e });
+      sun.shadow.camera.updateProjectionMatrix();
+      room = next;
+      setTime(time);
     },
     // Call once per frame.
     update() {

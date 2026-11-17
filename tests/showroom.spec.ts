@@ -15,10 +15,12 @@ const hash = (page: Page) => page.evaluate(() => decodeURIComponent(location.has
 const slot = (page: Page, name: string) => page.locator('.slot', { hasText: name });
 const tab = (page: Page, name: string) => page.locator('#tabs button', { hasText: name });
 const clock = (page: Page) => page.locator('#daylight .clock');
+const room = (page: Page, name: string) => page.locator('#rooms button', { hasText: name });
 
 test('loads and renders the room', async ({ page }) => {
   const errors = await open(page);
   await expect(page.locator('#scene')).toBeVisible();
+  expect(await hash(page)).toContain('v=2&room=living');
   expect(await hash(page)).toContain('floor=oak-fixture');
   expect(await hash(page)).toContain('t=12');
   expect(errors).toEqual([]);
@@ -51,6 +53,7 @@ test('applying a swatch updates the hash and the card', async ({ page }) => {
 test('opening a link restores the room', async ({ page }) => {
   await open(page, '#v=1&floor=concrete-fixture&walls=clay-fixture&t=18.5');
   await expect(clock(page)).toHaveText('18:30');
+  expect(await hash(page)).toContain('room=living');
   await slot(page, 'Floor').click();
   await expect(page.locator('#card .name')).toHaveText('Concrete Fixture');
   await slot(page, 'Walls').click();
@@ -136,6 +139,65 @@ test('keys from PRD 6.10', async ({ page }) => {
   await expect.poll(cameraPosition).toEqual(start);
 
   // Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z are covered in the undo test above.
+});
+
+test('switching rooms shows its surfaces and updates the hash', async ({ page }) => {
+  await open(page);
+  await room(page, 'Bedroom').click();
+  await expect(room(page, 'Bedroom')).toHaveAttribute('aria-pressed', 'true');
+  await expect(slot(page, 'Bedding')).toBeVisible();
+  await expect(slot(page, 'Slat wall')).toHaveCount(0);
+  await expect.poll(() => hash(page)).toContain('room=bedroom');
+  expect(await hash(page)).toContain('bedding=linen-fixture');
+});
+
+test('a v2 link opens its room and time', async ({ page }) => {
+  await open(page, '#v=2&room=bedroom&bedding=velvet-fixture&t=8');
+  await expect(room(page, 'Bedroom')).toHaveAttribute('aria-pressed', 'true');
+  await expect(clock(page)).toHaveText('08:00');
+  await slot(page, 'Bedding').click();
+  await expect(page.locator('#card .name')).toHaveText('Velvet Fixture');
+});
+
+test('each room keeps its own textures, time and undo', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Night' }).click();          // living: t=21
+  await room(page, 'Bedroom').click();
+  await expect(clock(page)).toHaveText('12:00');
+  await expect(page.locator('#toolbar [data-action="undo"]')).toBeDisabled();
+  await page.keyboard.press(']');                                      // bedroom: t=13
+  await room(page, 'Living room').click();
+  await expect.poll(() => hash(page)).toContain('t=21');
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).toContain('t=12');
+  await room(page, 'Bedroom').click();
+  await expect(clock(page)).toHaveText('13:00');
+});
+
+test('a texture that loads after a switch stays on its own room', async ({ page }) => {
+  // Only the maps are delayed. The thumbnail is not, so the loader isn't held up.
+  await page.route('**/textures/marble-fixture/*.ktx2', async (route) => { await new Promise((r) => setTimeout(r, 3000)); await route.continue(); });
+  await open(page);
+  await slot(page, 'Floor').click();
+  await tab(page, 'Stone and tiles').click();
+  await page.getByRole('button', { name: 'Marble Fixture' }).click();
+  await room(page, 'Bedroom').click();
+  await page.waitForTimeout(3500);
+  const floorMap = () => page.evaluate(() => (window as any).showroom.materials().floor.map?.name);
+  expect(await floorMap()).toBe('oak-fixture');                         // the bedroom's own material
+  await slot(page, 'Floor').click();
+  await expect(page.locator('#card .name')).toHaveText('Oak Fixture');
+  await room(page, 'Living room').click();
+  await expect.poll(floorMap).toBe('marble-fixture');
+});
+
+test('the last room clicked wins', async ({ page }) => {
+  await open(page);
+  await room(page, 'Bedroom').click();
+  await room(page, 'Living room').click();                              // straight away, during the switch
+  await expect.poll(() => hash(page)).toContain('room=living');
+  await expect(slot(page, 'Slat wall')).toBeVisible();
+  await expect(slot(page, 'Bedding')).toHaveCount(0);
 });
 
 test('default room screenshot, fixture set', async ({ page }) => {
