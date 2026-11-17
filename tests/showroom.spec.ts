@@ -290,7 +290,7 @@ test('snow is a garden switch in the link and in undo', async ({ page }) => {
   const errors = await open(page);
   await expect(page.locator('#snow')).toBeHidden();
   await room(page, 'Garden').click();
-  // The Garden draws slowly in headless Chromium, and a slow frame holds up the reload below, so switch GTAO off.
+  // The Garden draws slowly in headless Chromium, so switch GTAO off on this page. The reload below starts a new page.
   await page.evaluate(() => ((window as any).showroom.gtao.enabled = false));
   await page.locator('#snow').click();
   await expect(page.locator('#snow')).toHaveAttribute('aria-pressed', 'true');
@@ -309,6 +309,21 @@ test('snow is a garden switch in the link and in undo', async ({ page }) => {
   await room(page, 'Living room').click();
   await expect(page.locator('#snow')).toBeHidden();
   await expect.poll(flakes).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('the snow switch works on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const errors = await open(page);
+  await expect(page.locator('#snow')).toBeHidden();
+  await room(page, 'Garden').click();
+  await expect(page.locator('#snow')).toBeVisible();
+  await expect(page.locator('#tray #snow')).toHaveCount(1);
+  await page.locator('#snow').click();
+  await expect(page.locator('#snow')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => hash(page)).toContain('snow=1');
+  await page.locator('#snow').click();
+  await expect(page.locator('#snow')).toHaveAttribute('aria-pressed', 'false');
   expect(errors).toEqual([]);
 });
 

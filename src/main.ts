@@ -203,6 +203,11 @@ if (!gl) {
     snowButton.hidden = !active.flakes;
     snowButton.setAttribute('aria-pressed', String(active.snow));
   };
+  // On narrow screens the switch moves into the time row in the tray, as the time row itself does (PRD 9).
+  const narrow = matchMedia('(max-width: 900px)');
+  const placeSnow = () => (narrow.matches ? document.querySelector('.time')! : document.getElementById('daylight')!).append(snowButton);
+  narrow.addEventListener('change', placeSnow);
+  placeSnow();
   snowButton.addEventListener('click', () => {
     active.snow = !active.snow;
     showSnow();

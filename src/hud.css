@@ -506,6 +506,12 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
     margin-bottom: 6px;
   }
 
+  #tray #snow {
+    width: auto;
+    margin-top: 0;
+    flex-shrink: 0;
+  }
+
   #tray .clock {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 14px;
