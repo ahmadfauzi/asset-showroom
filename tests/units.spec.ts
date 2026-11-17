@@ -17,3 +17,21 @@ test('history: commit, undo, redo', async ({ page }) => {
   });
   expect(result).toEqual({ pushed: [true, false, true], undone: [2, 1, undefined], redone: 2, future: 0, committed: 9 });
 });
+
+test('state: v2 round trip, v1 links, bad values', async ({ page }) => {
+  const r = await run(page, async () => {
+    const s = await import('/src/state.ts');
+    return {
+      hash: s.toHash('garden', { textures: { ground: 'grass-fixture', floor: 'oak-fixture' }, time: 18.5, snow: true }),
+      v1: s.fromHash('#v=1&floor=concrete-fixture&bedding=linen-fixture&t=18.5'),
+      v2: s.fromHash('#v=2&room=bathroom&towels=velvet-fixture&ground=grass-fixture&snow=1&t=9'),
+      attic: s.fromHash('#v=2&room=attic&floor=nope&t=30'),
+      snowIndoors: s.toHash('living', { textures: {}, time: 12, snow: true }),
+    };
+  });
+  expect(r.hash).toBe('#v=2&room=garden&ground=grass-fixture&t=18.5&snow=1');
+  expect(r.v1).toEqual({ room: 'living', textures: { floor: 'concrete-fixture' }, time: 18.5, snow: false, missing: 0 });
+  expect(r.v2).toEqual({ room: 'bathroom', textures: { towels: 'velvet-fixture' }, time: 9, snow: false, missing: 0 });
+  expect(r.attic).toEqual({ room: 'living', textures: {}, snow: false, missing: 1 });
+  expect(r.snowIndoors).toBe('#v=2&room=living&t=12');
+});

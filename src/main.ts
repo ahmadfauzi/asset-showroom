@@ -26,7 +26,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import manifest, { type TextureInfo } from '@manifest';
 import { createDaylight } from './daylight';
 import { createHud, DRAG_TYPE } from './hud';
-import { accepts, buildRoom, SLOT_NAMES, type Slot } from './room';
+import { accepts, SLOT_NAMES, type Slot } from './room';
+import { buildRoom } from './rooms/parts';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
 
@@ -155,17 +156,17 @@ if (!gl) {
 
   // Undo and redo (PRD 6.7). Each entry is the whole room: the texture picked for each slot and the time.
   // The room is also kept in the URL hash, so the address is always a share link (PRD 6.8).
-  const snapshot = (): RoomState => ({ textures: { ...latest }, time: daylight.target() });
+  const snapshot = (): RoomState => ({ textures: { ...latest }, time: daylight.target(), snow: false });
   const past: RoomState[] = [];
   let future: RoomState[] = [];
   let committed: RoomState;
   const save = () => {
-    history.replaceState(null, '', toHash(committed));
+    history.replaceState(null, '', toHash('living', committed));
     toolbar.setHistory(past.length > 0, future.length > 0);
   };
   const commit = () => {
     const next = snapshot();
-    if (toHash(next) === toHash(committed)) return;
+    if (toHash('living', next) === toHash('living', committed)) return;
     past.push(committed);
     future = [];
     committed = next;
@@ -435,7 +436,7 @@ if (!gl) {
   // The room opens as the link describes, with defaults for anything the link leaves out (PRD 6.8).
   const link = fromHash(location.hash);
   if (link.time !== undefined) daylight.setTime(link.time);
-  const defaults = Object.entries({ ...manifest.defaults.living, bedding: manifest.defaults.bedroom.bedding, ...link.textures }).flatMap(([slot, slug]) => {
+  const defaults = Object.entries({ ...(manifest.defaults.living ?? {}), bedding: manifest.defaults.bedroom?.bedding, ...link.textures }).flatMap(([slot, slug]) => {
     const texture = manifest.textures.find((t) => t.slug === slug);
     return texture && slot in materials ? [applyTexture(slot as Slot, texture)] : [];
   });
