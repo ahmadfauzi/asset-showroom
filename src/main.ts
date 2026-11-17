@@ -66,7 +66,9 @@ if (!gl) {
   renderer.shadowMap.type = PCFShadowMap;
 
   const scene = new Scene();
-  scene.background = new Color('#16161a');
+  // Neutral tone mapping darkens the darkest colours a lot, so this shows on screen as about #16161a, the page and
+  // fade colour.
+  scene.background = new Color('#313132');
 
   const sessions: Partial<Record<RoomKey, RoomSession>> = {};
   let active!: RoomSession;
