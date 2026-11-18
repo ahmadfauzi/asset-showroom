@@ -31,7 +31,7 @@ npm run build
 
 ## Textures
 
-Needs [KTX-Software](https://github.com/KhronosGroup/KTX-Software/releases) 4.4 or newer. `toktx` must be on your PATH, or `TOKTX` must hold its full path. `npm run textures` and `npm run models` both need it. On Windows it installs to `C:Program FilesKTX-Softwarein`, which is not added to PATH.
+Needs [KTX-Software](https://github.com/KhronosGroup/KTX-Software/releases) 4.4 or newer. `toktx` must be on your PATH, or `TOKTX` must hold its full path. `npm run textures` and `npm run models` both need it. On Windows it installs to `C:\Program Files\KTX-Software\bin`, which is not added to PATH.
 
 1. Put the raw 2K Poliigon download in `assets-src/<set>/<slug>/`. `<set>` is `free` or `premium`.
 2. Add the texture to `src/textures/<set>.json`.
