@@ -291,6 +291,25 @@ test.describe('an uploaded texture', () => {
     expect(errors).toEqual([]);
   });
 
+  test('keys typed in a size field stay in the field', async () => {
+    await slot(page, 'Floor').click();
+    await expect(page.locator('#card .category')).toHaveText('Uploaded texture');
+    const before = await hash(page);
+    const undo = page.locator('#toolbar [data-action="undo"]');
+    const couldUndo = await undo.isEnabled();
+    const width = page.getByLabel('Width (cm)');
+    await width.click();
+    await width.press('End');
+    await width.press('5');
+    await width.press('Control+z');
+    await width.press(']');
+    await width.press('Escape');
+    expect(await hash(page)).toBe(before);
+    expect(await undo.isEnabled()).toBe(couldUndo);
+    await expect(page.locator('#card')).toBeVisible();
+    await expect(slot(page, 'Floor')).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('a link with uploads in a fresh browser shows the defaults and one toast', async ({ browser }) => {
     const link = await hash(page);
     // While one room renders on SwiftShader, a second page in the same browser doesn't finish loading, so the

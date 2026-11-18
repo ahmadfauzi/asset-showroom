@@ -104,6 +104,7 @@ export function createHud({
       const shown = selected && applied[selected];
       if (!shown || !('uploaded' in shown)) return;
       const size = sizeInputs.map((field, i) => Math.min(1000, Math.max(10, Math.round(field.valueAsNumber || shown.sizeCm[i])))) as [number, number];
+      sizeInputs.forEach((field, i) => (field.value = String(size[i])));
       onSize(shown.slug, size);
       render();
     });
@@ -127,7 +128,8 @@ export function createHud({
       cardSize.textContent = `${shown.sizeCm[0]} × ${shown.sizeCm[1]} cm`;
       cardSize.hidden = cardLink.hidden = uploaded;
       dims.hidden = !uploaded;
-      sizeInputs.forEach((input, i) => (input.value = String(shown.sizeCm[i])));
+      // Not the field being typed in, so a texture that finishes loading doesn't reset it.
+      sizeInputs.forEach((input, i) => input !== document.activeElement && (input.value = String(shown.sizeCm[i])));
       if (!uploaded) cardLink.href = shown.poliigonUrl;
     }
 
