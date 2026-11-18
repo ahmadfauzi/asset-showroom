@@ -8,6 +8,9 @@ export type RoomState = { textures: Partial<Record<Slot, string>>; time: number;
 const UPLOAD_ID = /^u-[0-9a-f]{8}$/;
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
+// Two decimals, never "-0.00": a link and its reload must give the same string.
+const fixed = (n: number) => (Number(n.toFixed(2)) + 0).toFixed(2);
+
 // Share link format (PRD 15.7): #v=2&room=garden&ground=grass&t=18.5&snow=1
 // Only the room's own slots are saved, in the order of rooms.json. Then one m=id,x,y,z,turn per placed model,
 // then t. snow=1 and sky=id&sr=turn are only written in the Garden.
@@ -17,7 +20,7 @@ export function toHash(room: RoomKey, state: RoomState) {
     const slug = state.textures[slot];
     if (slug) params.set(slot, slug);
   }
-  for (const { id, x, y, z, turn } of state.models) params.append('m', [id, x.toFixed(2), y.toFixed(2), z.toFixed(2), turn].join(','));
+  for (const { id, x, y, z, turn } of state.models) params.append('m', [id, fixed(x), fixed(y), fixed(z), turn].join(','));
   params.set('t', String(state.time));
   if (room === 'garden' && state.snow) params.set('snow', '1');
   if (room === 'garden' && state.sky) {
@@ -77,8 +80,9 @@ export function fromHash(hash: string, uploads: ReadonlySet<string> = new Set())
   // The sky only exists in the Garden.
   const sky = params.get('sky');
   if (link.room === 'garden' && sky && UPLOAD_ID.test(sky)) {
-    const turn = Number(params.get('sr'));
-    if (uploads.has(sky)) link.sky = { id: sky, turn: turn >= 0 && turn <= 345 && turn % 15 === 0 ? turn : 0 };
+    const sr = params.get('sr') ?? '';
+    const turn = NUMBER.test(sr) ? Number(sr) + 0 : 0;
+    if (uploads.has(sky)) link.sky = { id: sky, turn: turn >= 0 && turn <= 355 && turn % 5 === 0 ? turn : 0 };
     else link.uploadsMissing++;
   }
 

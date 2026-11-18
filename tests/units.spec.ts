@@ -55,6 +55,8 @@ test('state: uploads, models and sky in the link', async ({ page }) => {
       bad: s.fromHash('#v=2&room=living&m=u-0000000b,NaN,0,0,0&m=u-0000000b,99,0,0,0&m=u-0000000b,0,0,0,10&m=x,0,0,0,0&m=u-0000000b,0,0,0', known),
       eleven: s.fromHash(`#v=2&room=living&${Array.from({ length: 11 }, (_, i) => m(i)).join('&')}`, known).models.length,
       skyIndoors: s.fromHash('#v=2&room=living&sky=u-0000000c', known).sky,
+      sr: ['5', '7', '360', '0x2D', '1.5e1', '%2045'].map((sr) => s.fromHash(`#v=2&room=garden&sky=u-0000000c&sr=${sr}`, known).sky),
+      negZero: s.toHash('living', { ...state, models: [{ id: 'u-0000000b', x: -0.001, y: 0, z: 0, turn: 0 }] }),
     };
   });
   expect(r.garden).toBe('#v=2&room=garden&ground=u-0000000a&m=u-0000000b%2C1.20%2C0.75%2C-0.46%2C90&t=12&sky=u-0000000c&sr=135');
@@ -64,6 +66,8 @@ test('state: uploads, models and sky in the link', async ({ page }) => {
   expect(r.bad.models).toEqual([]);
   expect(r.eleven).toBe(10);
   expect(r.skyIndoors).toBeNull();
+  expect(r.sr).toEqual([5, 0, 0, 0, 0, 0].map((turn) => ({ id: 'u-0000000c', turn })));
+  expect(r.negZero).toBe('#v=2&room=living&m=u-0000000b%2C0.00%2C0.00%2C0.00%2C0&t=12');
 });
 
 test('uploads: kind detection on the example zip lists', async ({ page }) => {
