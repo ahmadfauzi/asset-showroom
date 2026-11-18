@@ -188,6 +188,8 @@ if (!gl) {
     textures: { ...session.latest },
     time: session === active ? daylight.target() : session.time,
     snow: session.snow,
+    models: [], // Task 6 and later fill these in
+    sky: null,
   });
   const save = () => {
     window.history.replaceState(null, '', toHash(active.built.key, active.history.committed));
@@ -496,7 +498,7 @@ if (!gl) {
 
   // A room opens with its defaults. The room in the link also takes the link's textures, time and snow
   // (PRD 6.8, 15.7).
-  const link = fromHash(location.hash);
+  const link = fromHash(location.hash, library.ids());
   const sessionFor = (key: RoomKey) => (sessions[key] ??= createSession(key));
   const createSession = (key: RoomKey) => {
     const fromLink = key === link.room;
@@ -507,7 +509,7 @@ if (!gl) {
       built,
       latest: {},
       current: {},
-      history: createHistory<RoomState>({ textures: {}, time, snow }), // replaced below, once the picks are in
+      history: createHistory<RoomState>({ textures: {}, time, snow, models: [], sky: null }), // replaced below, once the picks are in
       time,
       snow,
       loads: [built.models.then((failed) => failed.length && session === active && toolbar.toast("Couldn't load some decor. The room still works."))],

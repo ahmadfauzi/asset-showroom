@@ -23,22 +23,47 @@ test('state: v2 round trip, v1 links, bad values', async ({ page }) => {
   const r = await run(page, async () => {
     const s = await import('/src/state.ts');
     return {
-      hash: s.toHash('garden', { textures: { ground: 'grass-fixture', floor: 'oak-fixture' }, time: 18.5, snow: true }),
+      hash: s.toHash('garden', { textures: { ground: 'grass-fixture', floor: 'oak-fixture' }, time: 18.5, snow: true, models: [], sky: null }),
       v1: s.fromHash('#v=1&floor=concrete-fixture&bedding=linen-fixture&t=18.5'),
       v2: s.fromHash('#v=2&room=bathroom&towels=velvet-fixture&ground=grass-fixture&snow=1&t=9'),
       attic: s.fromHash('#v=2&room=attic&floor=nope&t=30'),
-      snowIndoors: s.toHash('living', { textures: {}, time: 12, snow: true }),
+      snowIndoors: s.toHash('living', { textures: {}, time: 12, snow: true, models: [], sky: null }),
       gardenSnow: s.fromHash('#v=2&room=garden&snow=1'),
       wrongCategory: s.fromHash('#v=2&room=living&floor=linen-fixture'),
     };
   });
   expect(r.hash).toBe('#v=2&room=garden&ground=grass-fixture&t=18.5&snow=1');
-  expect(r.v1).toEqual({ room: 'living', textures: { floor: 'concrete-fixture' }, time: 18.5, snow: false, missing: 0 });
-  expect(r.v2).toEqual({ room: 'bathroom', textures: { towels: 'velvet-fixture' }, time: 9, snow: false, missing: 0 });
-  expect(r.attic).toEqual({ room: 'living', textures: {}, snow: false, missing: 1 });
+  expect(r.v1).toEqual({ room: 'living', textures: { floor: 'concrete-fixture' }, time: 18.5, snow: false, missing: 0, models: [], sky: null, uploadsMissing: 0 });
+  expect(r.v2).toEqual({ room: 'bathroom', textures: { towels: 'velvet-fixture' }, time: 9, snow: false, missing: 0, models: [], sky: null, uploadsMissing: 0 });
+  expect(r.attic).toEqual({ room: 'living', textures: {}, snow: false, missing: 1, models: [], sky: null, uploadsMissing: 0 });
   expect(r.snowIndoors).toBe('#v=2&room=living&t=12');
-  expect(r.gardenSnow).toEqual({ room: 'garden', textures: {}, snow: true, missing: 0 });
-  expect(r.wrongCategory).toEqual({ room: 'living', textures: {}, snow: false, missing: 0 });
+  expect(r.gardenSnow).toEqual({ room: 'garden', textures: {}, snow: true, missing: 0, models: [], sky: null, uploadsMissing: 0 });
+  expect(r.wrongCategory).toEqual({ room: 'living', textures: {}, snow: false, missing: 0, models: [], sky: null, uploadsMissing: 0 });
+});
+
+test('state: uploads, models and sky in the link', async ({ page }) => {
+  const r = await run(page, async () => {
+    const s = await import('/src/state.ts');
+    const known = new Set(['u-0000000a', 'u-0000000b', 'u-0000000c']);
+    const state = { textures: { ground: 'u-0000000a' }, time: 12, snow: false, models: [{ id: 'u-0000000b', x: 1.2, y: 0.75, z: -0.456, turn: 90 }], sky: { id: 'u-0000000c', turn: 135 } };
+    const m = (i: number) => `m=u-0000000b,${i},0,0,0`;
+    return {
+      garden: s.toHash('garden', state),
+      living: s.toHash('living', { ...state, textures: { floor: 'u-0000000a' } }),
+      back: s.fromHash('#v=2&room=garden&ground=u-0000000a&m=u-0000000b,1.20,0.75,-0.46,90&t=12&sky=u-0000000c&sr=135', known),
+      stranger: s.fromHash('#v=2&room=garden&ground=u-0000000a&m=u-0000000b,1,0,0,0&sky=u-0000000c&floor=nope'),
+      bad: s.fromHash('#v=2&room=living&m=u-0000000b,NaN,0,0,0&m=u-0000000b,99,0,0,0&m=u-0000000b,0,0,0,10&m=x,0,0,0,0&m=u-0000000b,0,0,0', known),
+      eleven: s.fromHash(`#v=2&room=living&${Array.from({ length: 11 }, (_, i) => m(i)).join('&')}`, known).models.length,
+      skyIndoors: s.fromHash('#v=2&room=living&sky=u-0000000c', known).sky,
+    };
+  });
+  expect(r.garden).toBe('#v=2&room=garden&ground=u-0000000a&m=u-0000000b%2C1.20%2C0.75%2C-0.46%2C90&t=12&sky=u-0000000c&sr=135');
+  expect(r.living).toBe('#v=2&room=living&floor=u-0000000a&m=u-0000000b%2C1.20%2C0.75%2C-0.46%2C90&t=12');
+  expect(r.back).toMatchObject({ room: 'garden', textures: { ground: 'u-0000000a' }, models: [{ id: 'u-0000000b', x: 1.2, y: 0.75, z: -0.46, turn: 90 }], sky: { id: 'u-0000000c', turn: 135 }, missing: 0, uploadsMissing: 0 });
+  expect(r.stranger).toMatchObject({ textures: {}, models: [], sky: null, missing: 0, uploadsMissing: 3 });
+  expect(r.bad.models).toEqual([]);
+  expect(r.eleven).toBe(10);
+  expect(r.skyIndoors).toBeNull();
 });
 
 test('uploads: kind detection on the example zip lists', async ({ page }) => {
