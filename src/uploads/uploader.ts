@@ -1,8 +1,7 @@
 import type { WebGLRenderer } from 'three';
-import { MESSAGES } from './detect';
 import type { Library } from './library';
 import type { createUploadsTab } from './tab';
-import { UploadError, type Upload } from './types';
+import { MESSAGES, UploadError, type Upload } from './types';
 
 // The Upload button and dropping a zip on the page (PRD 16.3). One upload runs at a time. The zip code loads
 // on the first upload, so it adds nothing to the start-up JavaScript (PRD 16.11).

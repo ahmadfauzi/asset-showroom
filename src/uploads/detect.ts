@@ -1,19 +1,7 @@
-import { UploadError, type Kind, type ZipEntry } from './types';
+import { LIMITS, MESSAGES, UploadError, type Kind, type ZipEntry } from './types';
 
-export const MESSAGES = {
-  zipSize: 'This zip is over 250 MB.',
-  unzipped: 'This zip unpacks to more than 1 GB.',
-  triangles: 'This model has more than 500,000 triangles.',
-  hdriSize: 'HDRIs up to 8K only.',
-  quota: 'Your browser is out of space for uploads. Delete some in Uploads and try again.',
-  memory: 'This file is too big for this device.',
-  exportFirst: 'Export it as .glb or .fbx first.',
-  nothing: 'This zip has no texture, model or HDRI we can read.',
-  busy: 'Wait for the current upload to finish.',
-  cap: 'This room has 10 models. Remove one first.',
-};
-
-export const LIMITS = { zipBytes: 250 * 1024 ** 2, unzippedBytes: 1024 ** 3, triangles: 500_000, hdriWidth: 8192, hdriHeight: 4096, modelsPerRoom: 10 };
+// Kept in types.ts so the start-up code can use them without the detection code (PRD 16.11).
+export { LIMITS, MESSAGES } from './types';
 
 export type MapRole = 'color' | 'normal' | 'ao' | 'roughness' | 'gloss' | 'metalness';
 

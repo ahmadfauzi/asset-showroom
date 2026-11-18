@@ -212,6 +212,34 @@ button svg {
   white-space: nowrap;
 }
 
+#card .size::before {
+  content: ' · ';
+}
+
+/* Width and height of an uploaded texture (PRD 16.7). */
+#card .dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+#card .dims[hidden] {
+  display: none;
+}
+
+#card .dims input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
 #card a {
   font-size: 12px;
   color: var(--accent);

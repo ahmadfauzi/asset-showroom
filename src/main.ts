@@ -24,17 +24,18 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import manifest, { type TextureInfo } from '@manifest';
+import manifest from '@manifest';
 import { createDaylight, DEFAULT_TIME } from './daylight';
 import { commit as record, createHistory, redo as stepForward, undo as stepBack, type History } from './history';
 import { createHud, DRAG_TYPE } from './hud';
-import { accepts, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
+import { accepts, fits, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 import { buildRoom, type BuiltRoom } from './rooms/index';
 import { createSnow } from './snow';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
 import { createLibrary } from './uploads/library';
 import { createUploadsTab } from './uploads/tab';
+import type { AnyTexture } from './uploads/types';
 import { createUploader } from './uploads/uploader';
 
 // One per room, made the first time the room is needed. It keeps the room's textures, time, snow and undo
@@ -42,7 +43,7 @@ import { createUploader } from './uploads/uploader';
 type RoomSession = {
   built: BuiltRoom;
   latest: Partial<Record<Slot, string>>; // the last texture picked for each slot, even if it is still loading
-  current: Partial<Record<Slot, TextureInfo>>; // the texture each slot shows
+  current: Partial<Record<Slot, AnyTexture>>; // the texture each slot shows
   history: History<RoomState>;
   time: number; // the room's time while another room shows
   snow: boolean;
@@ -61,6 +62,8 @@ if (!gl) {
 } else {
   // The uploads in this browser are read before the link, so the link can use their ids (PRD 16.10).
   const library = await createLibrary();
+  // A bundled texture or an uploaded one (u-xxxxxxxx).
+  const findTexture = (slug: string): AnyTexture | undefined => manifest.textures.find((t) => t.slug === slug) ?? library.texture(slug);
   const renderer = new WebGLRenderer({ canvas, context: gl });
   // Neutral keeps the textures' own colours: whites stay white and wood stays brown (ACES shifts them toward
   // orange, AgX greys them). It is a little darker than ACES, so the exposure keeps the v1 brightness.
@@ -126,13 +129,15 @@ if (!gl) {
     outline.selectedObjects = slot ? active.built.group.children.filter((mesh) => mesh.userData.slot === slot) : [];
     hud.setSelected(slot);
   };
+  const use = (texture: AnyTexture) => {
+    if (!selected || !fits(selected, texture)) return;
+    applyTexture(active, selected, texture);
+    commit();
+  };
   const hud = createHud({
     onSelect: select,
-    onApply(texture) {
-      if (!selected || !accepts(selected, texture.category)) return;
-      applyTexture(active, selected, texture);
-      commit();
-    },
+    onApply: use,
+    onSize: (id, sizeCm) => void library.setSize(id, sizeCm),
     onRoom: (key) => void showRoom(key),
   });
 
@@ -173,10 +178,10 @@ if (!gl) {
   });
   canvas.addEventListener('drop', (event) => {
     event.preventDefault();
-    const texture = manifest.textures.find((t) => t.slug === event.dataTransfer?.getData(DRAG_TYPE));
+    const texture = findTexture(event.dataTransfer?.getData(DRAG_TYPE) ?? '');
     const hit = hitAt(event);
     const slot: Slot | undefined = hit?.object.userData.slot;
-    if (!texture || !hit || !slot || !accepts(slot, texture.category)) return;
+    if (!texture || !hit || !slot || !fits(slot, texture)) return;
     select(slot);
     applyTexture(active, slot, texture, hit.point);
     commit();
@@ -203,8 +208,8 @@ if (!gl) {
   const restore = (state: RoomState | undefined) => {
     if (!state) return;
     for (const [slot, slug] of Object.entries(state.textures) as [Slot, string][]) {
-      const texture = manifest.textures.find((t) => t.slug === slug);
-      if (texture && slug !== active.latest[slot]) applyTexture(active, slot, texture);
+      const texture = findTexture(slug);
+      if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
     }
     daylight.setTime(state.time);
     active.snow = state.snow;
@@ -256,7 +261,7 @@ if (!gl) {
     save: savePicture,
     copy: () =>
       navigator.clipboard.writeText(location.href).then(
-        () => toolbar.toast('Link copied. Anyone who opens it sees this room.'),
+        () => toolbar.toast(/=u-/.test(location.hash) ? 'Link copied. Uploads only show in this browser.' : 'Link copied. Anyone who opens it sees this room.'),
         () => toolbar.toast("Couldn't copy the link. Copy it from the address bar instead."),
       ),
     upload: () => uploader.pick(),
@@ -265,7 +270,10 @@ if (!gl) {
   // Uploads (PRD 16.3, 16.6).
   const uploadsTab = createUploadsTab({
     thumb: library.thumb,
-    onUse: () => {},
+    onUse(meta) {
+      const texture = library.texture(meta.id);
+      if (texture) use(texture);
+    },
     onDelete(meta) {
       if (!confirm(`Delete ${meta.name}?`)) return;
       library.remove(meta.id).then(
@@ -365,23 +373,34 @@ if (!gl) {
   const ready = new Set<string>();
   const progress = new Map<string, number>();
   const waiting = new Set<string>(); // slugs someone applied before they finished loading
-  const load = ({ slug, sizeCm }: TextureInfo) => {
+  // Uploaded maps come from the library, which sets their wrapping and size.
+  const load = (texture: AnyTexture) => {
+    const { slug, sizeCm } = texture;
     if (!loaded.has(slug)) {
       const files = [0, 0, 0];
-      const maps = ['color', 'normal', 'orm'].map((map, i) =>
-        ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`, (event) => {
-          files[i] = event.total ? event.loaded / event.total : 0;
-          progress.set(slug, (files[0] + files[1] + files[2]) / 3);
-          if (waiting.has(slug)) hud.setProgress(slug, progress.get(slug)!);
-        }),
-      );
+      const maps =
+        'uploaded' in texture
+          ? library.loadTexture(slug)
+          : Promise.all(
+              ['color', 'normal', 'orm'].map((map, i) =>
+                ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`, (event) => {
+                  files[i] = event.total ? event.loaded / event.total : 0;
+                  progress.set(slug, (files[0] + files[1] + files[2]) / 3);
+                  if (waiting.has(slug)) hud.setProgress(slug, progress.get(slug)!);
+                }),
+              ),
+            ).then((textures) => {
+              for (const map of textures) {
+                map.wrapS = map.wrapT = RepeatWrapping;
+                map.repeat.set(100 / sizeCm[0], 100 / sizeCm[1]);
+              }
+              return textures;
+            });
       loaded.set(
         slug,
-        Promise.all(maps)
+        maps
           .then((textures) => {
             for (const texture of textures) {
-              texture.wrapS = texture.wrapT = RepeatWrapping;
-              texture.repeat.set(100 / sizeCm[0], 100 / sizeCm[1]);
               texture.anisotropy = anisotropy;
               // The Playwright tests read which texture a material shows.
               if (manifest.set === 'fixture') texture.name = slug;
@@ -464,7 +483,7 @@ if (!gl) {
 
   // The last texture picked for a slot wins, even if an earlier one finishes loading later. A texture that
   // finishes after a room switch still lands on the room it was picked in.
-  const applyTexture = async (session: RoomSession, slot: Slot, texture: TextureInfo, dropPoint?: Vector3) => {
+  const applyTexture = async (session: RoomSession, slot: Slot, texture: AnyTexture, dropPoint?: Vector3) => {
     session.latest[slot] = texture.slug;
     // A texture that isn't loaded yet shows a progress ring on its swatch until it is (PRD 6.11 step 4).
     if (!ready.has(texture.slug)) {
@@ -516,7 +535,7 @@ if (!gl) {
     };
     const picks = { ...(manifest.defaults[key] ?? {}), ...(fromLink ? link.textures : {}) };
     for (const [slot, slug] of Object.entries(picks) as [Slot, string][]) {
-      const texture = manifest.textures.find((t) => t.slug === slug);
+      const texture = findTexture(slug);
       if (texture && built.materials[slot]) session.loads.push(applyTexture(session, slot, texture));
     }
     // The flakes fall inside the garden's bounds, with the top 4 m higher.
@@ -591,7 +610,9 @@ if (!gl) {
       loaderDone = true;
       frame = 0;
     });
-    if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");
+    // Only one toast: the uploads one wins (PRD 16.10).
+    if (link.uploadsMissing) toolbar.toast("This link uses uploads that are only on the sender's computer, so you see the defaults.");
+    else if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");
     // Then, one texture at a time to leave bandwidth for a texture someone picks: the rest of this room's
     // textures, then each other room with its textures and models.
     const others = (Object.keys(ROOMS) as RoomKey[]).filter((key) => key !== link.room);

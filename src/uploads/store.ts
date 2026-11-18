@@ -1,5 +1,4 @@
-import { MESSAGES } from './detect';
-import { UploadError, type Upload, type UploadFiles, type UploadMeta } from './types';
+import { MESSAGES, UploadError, type Upload, type UploadFiles, type UploadMeta } from './types';
 
 let opened: Promise<IDBDatabase> | undefined;
 const open = () => (opened ??= new Promise((resolve, reject) => {

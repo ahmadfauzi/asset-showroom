@@ -1,7 +1,6 @@
 import manifest from '@manifest';
 import { accepts, isRoom, ROOMS, type RoomKey, type Slot } from './room';
-import { LIMITS } from './uploads/detect';
-import type { Placement, Sky } from './uploads/types';
+import { LIMITS, type Placement, type Sky } from './uploads/types';
 
 export type RoomState = { textures: Partial<Record<Slot, string>>; time: number; snow: boolean; models: Placement[]; sky: Sky };
 

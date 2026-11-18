@@ -1,6 +1,7 @@
 import type { TextureInfo } from '@manifest';
 import rooms from './rooms.json';
 import slots from './textures/slots.json';
+import type { AnyTexture } from './uploads/types';
 
 export type Slot = keyof typeof slots;
 
@@ -9,6 +10,8 @@ export const ROOMS = rooms;
 export const isRoom = (value: string): value is RoomKey => Object.hasOwn(rooms, value);
 
 export const accepts = (slot: Slot, category: TextureInfo['category']) => (slots[slot] as string[]).includes(category);
+// Uploaded textures fit every surface (PRD 16.7).
+export const fits = (slot: Slot, texture: AnyTexture) => 'uploaded' in texture || accepts(slot, texture.category);
 
 export const SLOT_NAMES: Record<Slot, string> = {
   floor: 'Floor',

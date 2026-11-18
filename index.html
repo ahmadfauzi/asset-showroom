@@ -63,7 +63,13 @@
           <img alt="" width="56" height="56" />
           <div>
             <div class="name"></div>
-            <div class="meta"><span class="category"></span> · <span class="size"></span></div>
+            <div class="meta"><span class="category"></span><span class="size"></span></div>
+            <div class="dims" hidden>
+              <label for="card-width">Width (cm)</label>
+              <label for="card-height">Height (cm)</label>
+              <input id="card-width" type="number" min="10" max="1000" step="1" />
+              <input id="card-height" type="number" min="10" max="1000" step="1" />
+            </div>
             <a target="_blank" rel="noopener noreferrer">View asset</a>
           </div>
         </section>
