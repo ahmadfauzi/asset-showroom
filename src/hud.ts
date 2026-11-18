@@ -1,5 +1,4 @@
 import '@fontsource-variable/inter/wght.css';
-import '@fontsource/jetbrains-mono/400.css';
 import './hud.css';
 import manifest, { type TextureInfo } from '@manifest';
 import { accepts, PLACEHOLDER, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
@@ -108,7 +107,7 @@ export function createHud({
       cardLink.href = shown.poliigonUrl;
     }
 
-    chipText.textContent = selected ? `for the ${SLOT_NAMES[selected].toLowerCase()}` : 'Select a surface to apply a texture';
+    chipText.textContent = selected ? `Textures for the ${SLOT_NAMES[selected].toLowerCase()}` : 'Select a surface to apply a texture';
     chipClear.hidden = !selected;
 
     for (const [category, button] of Object.entries(tabButtons) as [Category, HTMLButtonElement][]) {
@@ -139,9 +138,12 @@ export function createHud({
     },
     setSelected(slot: Slot | null) {
       selected = slot;
-      // Jump to the first tab the slot accepts.
+      // Jump to the first tab the slot accepts, and scroll it into view where the tabs scroll (narrow screens).
       if (slot) tab = (Object.keys(CATEGORIES) as Category[]).find((category) => accepts(slot, category))!;
       render();
+      const tabs = tabButtons[tab].parentElement!;
+      const { offsetLeft, offsetWidth } = tabButtons[tab];
+      if (offsetLeft < tabs.scrollLeft || offsetLeft + offsetWidth > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = offsetLeft - 8;
     },
     setTexture(slot: Slot, texture: TextureInfo) {
       applied[slot] = texture;

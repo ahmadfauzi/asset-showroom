@@ -328,6 +328,22 @@ test('the snow switch works on a narrow screen', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('at 375 px the room switcher does not overlap the tray', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await open(page);
+  const rooms = (await page.locator('#rooms').boundingBox())!;
+  const tray = (await page.locator('#tray').boundingBox())!;
+  expect(rooms.y + rooms.height <= tray.y || tray.y + tray.height <= rooms.y).toBe(true);
+  await expect(page.locator('#rooms')).toBeVisible();
+});
+
+test('every HUD button has an accessible name', async ({ page }) => {
+  await open(page);
+  const unnamed = await page.locator('button:visible').evaluateAll((buttons) =>
+    buttons.filter((b) => !(b.getAttribute('aria-label') || b.textContent?.trim())).length);
+  expect(unnamed).toBe(0);
+});
+
 for (const key of ['living', 'bedroom', 'bathroom', 'garden']) {
   test(`${key} screenshot, fixture set`, async ({ page }) => {
     await open(page, `#v=2&room=${key}`);

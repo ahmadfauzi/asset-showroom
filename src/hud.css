@@ -1,91 +1,140 @@
+/* The HUD sits lightly over the room. Warm charcoal panels, one accent (the selection colour in the room too),
+   and state shown as a lifted chip: a lighter fill with a hairline edge. Tokens are in index.html. */
+
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 body {
-  font-family: 'Inter Variable', system-ui, sans-serif;
-  color: #e8e8ea;
+  font: 13px/1.4 'Inter Variable', system-ui, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgb(125 180 255 / 0.35);
 }
 
 button {
   font: inherit;
   color: inherit;
   background: none;
-  border: 1px solid transparent;
+  border: 0;
+  padding: 0;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible {
+button:disabled {
+  cursor: default;
+}
+
+button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
+/* Items inside a scrolling list get the ring on the inside, so the list doesn't clip it. */
+:is(.slot, .swatch, #tabs button):focus-visible {
+  outline-offset: -2px;
+}
+
+/* No backdrop blur: the panels are nearly opaque, and blurring the moving room every frame costs frame time. */
 .panel {
-  background: rgb(22 22 26 / 0.72);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+:is(#slots, #swatches, #help) {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 250 240 / 0.2) transparent;
+}
+
+/* One look for every HUD button: quiet at rest, a soft fill on hover, a lifted chip when on. */
+:is(#rooms, #toolbar, #daylight .presets, #tabs) button,
+.slot,
+#snow,
+#help form button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+:is(:is(#rooms, #toolbar, #daylight .presets, #tabs) button, .slot, #snow, #help form button):hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+:is(#rooms, #daylight .presets, #tabs) button[aria-pressed='true'],
+.slot[aria-pressed='true'] {
+  background: var(--on);
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 1px var(--line-strong),
+    0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+:is(#toolbar, #tabs) button:disabled {
+  color: var(--ink-off);
+}
+
+/* Left column: title and rooms, then the surfaces. */
+#side {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 240px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#masthead {
+  padding: 12px 6px 6px;
 }
 
 #title {
-  position: fixed;
-  top: 16px;
-  left: 20px;
-  margin: 0;
+  margin: 0 8px 8px;
   font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-/* Room switcher (PRD 15.6). Plain for now. */
 #rooms {
-  position: fixed;
-  top: 52px;
-  left: 16px;
-  width: 220px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
-  padding: 4px;
-  box-sizing: border-box;
-}
-
-#rooms button {
-  padding: 5px 8px;
-  border-radius: 8px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-#rooms button:hover {
-  background: rgb(255 255 255 / 0.08);
-}
-
-#rooms button[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: rgb(95 179 255 / 0.12);
-}
-
-/* Covers the room while it switches. main.ts waits the same 0.25 s before it swaps the room. */
-#fade {
-  position: fixed;
-  inset: 0;
-  background: #16161a;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s;
-}
-
-#fade.on {
-  opacity: 1;
 }
 
 #slots {
-  position: fixed;
-  top: 126px;
-  left: 16px;
-  width: 220px;
-  padding: 8px;
-  max-height: calc(100vh - 142px);
+  min-height: 0;
+  padding: 6px;
   overflow-y: auto;
-  box-sizing: border-box;
 }
 
 .slot {
@@ -94,225 +143,265 @@ input:focus-visible {
   gap: 10px;
   width: 100%;
   padding: 5px 6px;
-  border-radius: 8px;
   text-align: left;
-  font-size: 13px;
-}
-
-.slot:hover {
-  background: rgb(255 255 255 / 0.06);
-}
-
-.slot[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: rgb(95 179 255 / 0.12);
 }
 
 .slot .thumb {
   width: 28px;
   height: 28px;
   flex: none;
-  border-radius: 6px;
+  border-radius: 7px;
   background-size: cover;
+  box-shadow: inset 0 0 0 1px rgb(255 250 240 / 0.08);
+  transition: box-shadow var(--fast) var(--ease);
+}
+
+/* The selected surface's swatch takes the same ring colour as its outline in the room. */
+.slot[aria-pressed='true'] .thumb {
+  box-shadow:
+    0 0 0 2px var(--panel-solid),
+    0 0 0 3.5px var(--accent);
 }
 
 #card {
-  display: flex;
-  gap: 10px;
-  margin-top: 8px;
-  padding: 10px 6px 4px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
-  font-size: 12px;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 12px 6px 6px;
+  border-top: 1px solid var(--line);
+  transition:
+    opacity var(--base) var(--ease),
+    translate var(--base) var(--ease);
 }
 
-#card[hidden] {
-  display: none;
+@starting-style {
+  #card {
+    opacity: 0;
+    translate: 0 4px;
+  }
 }
 
 #card img {
-  border-radius: 6px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
 }
 
 #card .name {
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 #card .meta {
   margin: 2px 0 6px;
-  color: #a8a8ae;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
 }
 
 #card .size {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 #card a {
+  font-size: 12px;
   color: var(--accent);
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(125 180 255 / 0.45);
+  border-radius: 4px;
+}
+
+#card a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Right column: toolbar, then daylight. */
+#right {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
 #toolbar {
-  position: fixed;
-  top: 12px;
-  right: 16px;
+  height: var(--bar);
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: 4px;
 }
 
-#toolbar button {
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  white-space: nowrap;
+#toolbar .icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  padding: 0;
 }
 
-#toolbar button:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.08);
-}
-
-#toolbar button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-#toast {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 14px;
-  font-size: 13px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-#toast.show {
-  opacity: 1;
-}
-
-#help {
-  max-width: 520px;
-  padding: 20px 24px;
-  color: #e8e8ea;
-  background: rgb(22 22 26 / 0.96);
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-#help::backdrop {
-  background: rgb(0 0 0 / 0.5);
-}
-
-#help h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-}
-
-#help h3 {
-  margin: 16px 0 2px;
-  font-size: 14px;
-}
-
-#help p {
-  margin: 0;
-  color: #c8c8cc;
-}
-
-#help td {
-  padding: 3px 16px 3px 0;
-  color: #c8c8cc;
-}
-
-#help kbd {
-  padding: 1px 5px;
-  border: 1px solid rgb(255 255 255 / 0.2);
-  border-radius: 4px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 12px;
-}
-
-#help form {
-  margin-top: 16px;
-  text-align: right;
-}
-
-#help form button {
-  padding: 6px 14px;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 0.08);
-}
-
-body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip) {
-  display: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #toast {
-    transition: none;
-  }
+#toolbar .sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line-strong);
 }
 
 #daylight {
-  position: fixed;
-  top: 64px;
-  right: 16px;
-  width: 200px;
-  padding: 12px;
-  box-sizing: border-box;
+  width: 240px;
+  padding: 14px;
 }
 
-#daylight .clock {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 28px;
+.time {
+  display: grid;
+  gap: 10px;
+}
+
+.clock {
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
   text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The slider's track is the sky from 06:00 to 22:00: dawn, day, golden hour, dusk and night. */
+.time input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: none;
+  border-radius: 999px;
+  cursor: pointer;
+  --sky: linear-gradient(
+    to right,
+    #3a4766 0%,
+    #c9937c 6%,
+    #dcc497 15%,
+    #a6c3dc 37%,
+    #b3c8da 70%,
+    #e2a868 78%,
+    #a56f86 88%,
+    #2e3858 94%,
+    #1f2740 100%
+  );
+}
+
+.time input::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sky);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
+}
+
+.time input::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sky);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
+}
+
+.time input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fbf8f2;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.2),
+    0 2px 6px rgb(0 0 0 / 0.45);
+  transition: scale var(--fast) var(--ease);
+}
+
+.time input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: #fbf8f2;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.2),
+    0 2px 6px rgb(0 0 0 / 0.45);
+}
+
+.time input:active::-webkit-slider-thumb {
+  scale: 1.12;
 }
 
 #daylight .presets {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-top: 10px;
+  gap: 2px;
+  margin-top: 12px;
 }
 
-#daylight .presets button,
+#daylight .presets button {
+  font-size: 12.5px;
+}
+
+/* Snow is an on/off switch: a track with a knob that slides across. */
 #snow {
-  padding: 5px 6px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #c8c8cc;
-  background: rgb(255 255 255 / 0.05);
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-top: 8px;
+  padding-right: 52px;
 }
 
-#daylight .presets button[aria-pressed='true'],
+#snow::before,
+#snow::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  border-radius: 999px;
+  transition:
+    background-color var(--fast) var(--ease),
+    translate var(--base) var(--ease);
+}
+
+#snow::before {
+  right: 10px;
+  width: 32px;
+  height: 18px;
+  background: rgb(255 250 240 / 0.18);
+}
+
+#snow::after {
+  right: 26px;
+  width: 14px;
+  height: 14px;
+  background: #fbf8f2;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
 #snow[aria-pressed='true'] {
-  color: #fff;
-  border-color: var(--accent);
+  color: var(--ink);
 }
 
-#snow {
-  width: 100%;
-  margin-top: 4px;
+#snow[aria-pressed='true']::before {
+  background: var(--accent);
 }
 
-.time input {
-  width: 100%;
-  accent-color: var(--accent);
+#snow[aria-pressed='true']::after {
+  translate: 14px -50%;
 }
 
-
-
+/* Tray: the chip names the surface, then the category tabs and the swatches. */
 #tray {
   position: fixed;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   max-width: calc(100vw - 32px);
-  padding: 8px 10px 10px;
-  box-sizing: border-box;
+  padding: 6px 8px 8px;
 }
 
 #chip {
@@ -322,91 +411,126 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px 4px 12px;
+  gap: 2px;
+  min-height: 30px;
+  padding: 0 4px 0 14px;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 12px;
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  color: var(--ink-2);
   white-space: nowrap;
+}
+
+#chip:not(:has(button:not([hidden]))) {
+  padding-right: 14px;
 }
 
 #chip button {
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 15px;
-  line-height: 1.4;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--ink-3);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
 }
 
-#chip button[hidden] {
-  display: none;
+#chip button svg {
+  width: 16px;
+  height: 16px;
+}
+
+#chip button:hover {
+  background: var(--hover);
+  color: var(--ink);
 }
 
 #tabs {
+  position: relative;
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 #tabs button {
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #a8a8ae;
-  white-space: nowrap;
-}
-
-#tabs button[aria-pressed='true'] {
-  color: #fff;
-  background: rgb(255 255 255 / 0.08);
-}
-
-#tabs button:disabled {
-  opacity: 0.3;
-  cursor: default;
+  font-size: 12.5px;
 }
 
 #swatches {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  min-height: 92px;
+  gap: 4px;
+  margin-top: 6px;
+  min-height: 112px;
   overflow-x: auto;
 }
 
 .swatch {
   position: relative;
-  width: 76px;
+  width: 82px;
   flex: none;
-  padding: 4px;
-  border-radius: 8px;
-  font-size: 11px;
-  color: #c8c8cc;
+  padding: 5px 5px 6px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--ink-2);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    opacity var(--fast) var(--ease);
 }
 
-.swatch[hidden] {
-  display: none;
+/* A swatch fades in when its category opens. */
+@starting-style {
+  .swatch {
+    opacity: 0;
+  }
 }
 
 .swatch:hover {
-  border-color: rgb(255 255 255 / 0.15);
+  background: var(--hover);
+  color: var(--ink);
 }
 
 .swatch img {
   display: block;
-  width: 66px;
-  height: 66px;
-  margin-bottom: 4px;
-  border-radius: 6px;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 5px;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 250 240 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.35);
+  transition:
+    translate var(--base) var(--ease),
+    box-shadow var(--base) var(--ease);
+}
+
+/* A sample lifts when you point at it and settles when you press it. */
+.swatch:hover img {
+  translate: 0 -2px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 250 240 / 0.08),
+    0 6px 14px rgb(0 0 0 / 0.4);
+}
+
+.swatch:active img {
+  translate: 0 0;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
 }
 
 .swatch .ring {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 66px;
-  height: 66px;
+  top: 5px;
+  left: 5px;
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  background: rgb(0 0 0 / 0.4);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.45);
 }
 
 .swatch .ring::before {
@@ -418,40 +542,176 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
   mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
 }
 
-.swatch .ring[hidden] {
-  display: none;
-}
-
 .swatch .label {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: center;
 }
 
+/* Marks a texture that is on a surface in this room. */
 .swatch .dot {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 2px rgb(22 22 26);
-}
-
-.swatch .dot[hidden] {
-  display: none;
+  box-shadow: 0 0 0 2px var(--panel-solid);
 }
 
 #swatches .empty {
   align-self: center;
-  padding: 0 8px;
-  font-size: 12px;
-  color: #8a8a90;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--ink-3);
 }
 
-/* Narrow screens (PRD 9): the slot panel, card and presets hide, the clock and slider move into the tray. */
+#toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  max-width: calc(100vw - 32px);
+  width: max-content;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--panel-solid);
+  color: var(--ink);
+  opacity: 0;
+  pointer-events: none;
+  translate: -50% -6px;
+  transition:
+    opacity var(--base) var(--ease),
+    translate var(--base) var(--ease);
+}
+
+#toast.show {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+/* Covers the room while it switches. main.ts waits the same 250 ms before it swaps the room. */
+#fade {
+  position: fixed;
+  inset: 0;
+  background: var(--page);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#fade.on {
+  opacity: 1;
+}
+
+#help {
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 22px 28px 14px;
+  color: var(--ink);
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.5);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+/* The heading takes focus when the dialog opens, so it opens at the top. Tab goes on to Close. */
+#help h2:focus {
+  outline: none;
+}
+
+#help[open] {
+  transition:
+    opacity var(--base) var(--ease),
+    scale var(--base) var(--ease);
+}
+
+@starting-style {
+  #help[open] {
+    opacity: 0;
+    scale: 0.98;
+  }
+}
+
+#help::backdrop {
+  background: rgb(10 10 12 / 0.55);
+}
+
+#help h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+#help h3 {
+  margin: 12px 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#help p {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+#help table {
+  border-collapse: collapse;
+}
+
+#help td {
+  padding: 2px 16px 2px 0;
+  color: var(--ink-2);
+  vertical-align: top;
+}
+
+#help kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ink);
+}
+
+#help form {
+  margin-top: 14px;
+  text-align: right;
+}
+
+#help form button {
+  padding: 6px 16px;
+  background: var(--on);
+  color: var(--ink);
+}
+
+/* / hides the interface. It fades out, then leaves the page so it can't be clicked or tabbed to. */
+:is(#side, #right, #tray) {
+  transition:
+    opacity var(--base) var(--ease),
+    visibility 0s;
+}
+
+body.hud-hidden :is(#side, #right, #tray, #tooltip) {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--base) var(--ease),
+    visibility 0s var(--base);
+}
+
+/* Narrow screens (PRD 9): the slot panel, card and daylight panel hide. The toolbar and rooms run across the top,
+   and the clock, slider and snow switch move into the tray. */
 @media (max-width: 900px) {
   #title,
   #slots,
@@ -459,36 +719,44 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
     display: none;
   }
 
-  #toolbar {
+  #right {
     top: 8px;
     left: 8px;
     right: 8px;
+    align-items: stretch;
+  }
+
+  #toolbar {
     justify-content: space-between;
   }
 
   #toolbar button {
-    padding: 5px 7px;
-    font-size: 12px;
+    padding: 6px 8px;
   }
 
-  #rooms {
-    top: 52px;
+  #side {
+    top: calc(16px + var(--bar));
     left: 8px;
     right: 8px;
     width: auto;
+  }
+
+  #masthead {
+    height: var(--bar);
+    padding: 4px;
+  }
+
+  #rooms {
     display: flex;
-    justify-content: space-between;
   }
 
   #rooms button {
-    padding: 5px 7px;
-    font-size: 12px;
+    flex: 1 1 auto;
+    padding: 6px;
   }
 
   #toast {
-    top: 100px;
-    width: max-content;
-    max-width: calc(100vw - 32px);
+    top: calc(24px + 2 * var(--bar));
   }
 
   #tray {
@@ -497,28 +765,46 @@ body.hud-hidden :is(#title, #rooms, #toolbar, #slots, #daylight, #tray, #tooltip
     bottom: 8px;
     transform: none;
     max-width: none;
+    padding: 10px 8px 8px;
   }
 
   #tray .time {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
+    gap: 12px;
+    margin: 0 4px 6px;
+  }
+
+  #tray .clock {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0;
   }
 
   #tray #snow {
     width: auto;
-    margin-top: 0;
-    flex-shrink: 0;
-  }
-
-  #tray .clock {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 14px;
+    flex: none;
+    margin: 0;
   }
 
   #tabs {
     overflow-x: auto;
     scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 88%, transparent);
+  }
+}
+
+/* Nothing in the HUD moves when the system asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .swatch:hover img {
+    translate: none;
   }
 }
