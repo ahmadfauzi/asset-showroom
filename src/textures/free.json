@@ -14,11 +14,27 @@
     "bedroom": {
       "floor": "ash-wood-board",
       "featureWall": "denali-quartzite",
+      "walls": "painted-plaster",
       "bedding": "boucle-bubbly-rows",
+      "accents": "boucle-bubbly-rows",
+      "rugs": "boucle-bubbly-rows",
       "woodwork": "ash-wood-board"
     },
-    "bathroom": {},
-    "garden": {}
+    "bathroom": {
+      "floor": "ivory-ceramic-tile",
+      "walls": "painted-plaster",
+      "showerWall": "ivory-ceramic-tile",
+      "vanity": "ash-wood-board",
+      "countertop": "denali-quartzite",
+      "towels": "boucle-bubbly-rows"
+    },
+    "garden": {
+      "path": "denali-quartzite",
+      "deck": "ash-wood-board",
+      "fence": "ash-wood-board",
+      "rocks": "denali-quartzite",
+      "cushions": "boucle-bubbly-rows"
+    }
   },
   "textures": [
     {

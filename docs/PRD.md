@@ -444,7 +444,8 @@ New surface keys and what they accept. The keys from section 6.2 keep their mean
 - New category `ground`, shown as "Ground": grass, snow, soil, gravel.
 - The tray gets a fifth tab.
 - The manifest gives a default texture per room and per surface. The set check (7.3) runs per room: every surface in every room needs a texture it accepts and a valid default.
-- The free set has 3 textures today and none for fabric or ground. Ahmad adds free textures for fabric, grass, snow and tiles. Until then, building and testing use the fixture set, which gets plain-colour ground textures.
+- The free set has 5 textures: Ash Wood Board (wood), Bouclé, Bubbly Rows (fabric), Denali Quartzite and Ivory Ceramic Tile (stone and tiles), and Painted Plaster (wall). It has defaults for every surface except `garden/ground`, because it has no ground texture. Ahmad still needs to add free grass and snow textures. Until then `npm run textures -- free` stops at the set check with `garden/ground`, and building and testing use the fixture set, which has plain-colour ground textures.
+- Each room's defaults reuse the same few textures, so a room loads each texture once.
 
 ### 15.6 Switching rooms
 
@@ -478,7 +479,7 @@ New surface keys and what they accept. The keys from section 6.2 keep their mean
 - The Garden's Cushions surface is code-built seat pads and cushions on the bench or table set.
 - The Bedroom desk chair's seat and back are part of the Accents surface.
 - Surfaces on models without metre UVs, such as rocks, use triplanar mapping, so any stone texture fits them at its real-world size.
-- Candidate models, from the Poly Haven API on 17 Nov 2026 (size of the 1K glTF with textures): `potted_plant_04` 2.0 MB, `fern_02` 1.1 MB, `ornate_mirror_01` 0.7 MB, `rock_07` 2.1 MB, `rock_09` 1.9 MB, `shrub_02` 1.9 MB, `shrub_03` 1.6 MB, `planter_box_01` 2.2 MB, `painted_wooden_bench` 1.9 MB, `outdoor_table_chair_set_01` 1.2 MB. The builder picks the final set within the load budget.
+- Candidate models, from the Poly Haven API on 17 Nov 2026 (size of the 1K glTF with textures): `potted_plant_04` 2.0 MB, `fern_02` 1.1 MB, `ornate_mirror_01` 0.7 MB, `rock_07` 2.1 MB, `rock_09` 1.9 MB, `shrub_02` 1.9 MB, `shrub_03` 1.6 MB, `planter_box_01` 2.2 MB, `painted_wooden_bench` 1.9 MB, `outdoor_table_chair_set_01` 1.2 MB. The final set is `potted_plant_04`, `ornate_mirror_01`, `rock_07`, `rock_09`, `shrub_02`, `shrub_03`, `planter_box_01` and `outdoor_table_chair_set_01`, 5,072,668 bytes built. `fern_02` and `painted_wooden_bench` were not used.
 
 ### 15.10 Model pipeline
 
@@ -507,6 +508,17 @@ The script uses `@gltf-transform/cli` to compress meshes (meshopt) and turn text
 - The loader waits for the room in the link (or the Living room): its textures, its models and the thumbnails. It does not wait for other rooms.
 - After that, the other rooms load in the background, the active room's remaining textures first.
 - First load for any one room stays under 15 MB.
+- First load of a room is `dist/assets` and `dist/basis`, plus each default texture of the room once, all thumbnails, and the room's models. It is measured from the built files, before compression, on the free set, on 18 Nov 2026:
+
+| Room | First load |
+| --- | --- |
+| Living room | 7,914,443 bytes (7.9 MB) |
+| Bedroom | 7,285,123 bytes (7.3 MB) |
+| Bathroom | 8,495,084 bytes (8.5 MB) |
+| Garden | 9,917,399 bytes (9.9 MB), 12,117,399 bytes (12.1 MB) with one 2.2 MB ground texture |
+
+- In a real browser (Chromium, a `VITE_ASSET_SET=free` build and `vite preview`), the Bathroom downloaded 7,665,661 bytes. That is 829,423 less than the sum, because the server compresses JavaScript, CSS and the transcoder, and the page loads one font file instead of seven.
+- A texture picked before it has loaded starts its own download at once, so it does not wait for the background load. Its swatch shows a progress ring until it applies.
 - The 60 and 30 fps targets in section 10 apply to every room. GTAO still turns off first if a device falls under 30 fps.
 
 ### 15.13 Testing
@@ -538,5 +550,5 @@ Manual: frame rate in each room on one MacBook and one Windows laptop with integ
 
 | Question | Owner |
 | --- | --- |
-| Free textures for fabric, grass, snow and tiles | Ahmad |
-| Final Poly Haven picks within the 15 MB budget | Builder |
+| Free grass and snow textures, so the free set has a `garden/ground` default and `npm run textures -- free` passes | Ahmad |
+| Manual frame rate check on one MacBook (15.13). Only a Windows laptop with integrated graphics has been checked. | Ahmad |
