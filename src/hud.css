@@ -63,7 +63,7 @@ button svg {
   box-shadow: var(--shadow);
 }
 
-:is(#slots, #swatches, #help) {
+:is(#slots, #swatches, #upload-swatches, #help) {
   scrollbar-width: thin;
   scrollbar-color: rgb(255 250 240 / 0.2) transparent;
 }
@@ -467,7 +467,7 @@ button svg {
   font-size: 12.5px;
 }
 
-#swatches {
+:is(#swatches, #upload-swatches) {
   display: flex;
   gap: 4px;
   margin-top: 6px;
@@ -570,11 +570,110 @@ button svg {
   box-shadow: 0 0 0 2px var(--panel-solid);
 }
 
-#swatches .empty {
+:is(#swatches, #upload-swatches) .empty {
   align-self: center;
   padding: 0 10px;
   font-size: 12.5px;
   color: var(--ink-3);
+}
+
+/* Uploads tab (PRD 16.6): a kind icon on the thumbnail, a Delete button in its corner, and a card while an
+   upload runs. */
+.upload-swatch {
+  position: relative;
+  flex: none;
+}
+
+.upload-swatch .kind,
+.upload-swatch .delete {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--panel-solid);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.upload-swatch .kind {
+  top: 58px;
+  left: 9px;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+.upload-swatch .delete {
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  color: var(--ink-3);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.upload-swatch .delete:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.upload-swatch .delete:focus-visible {
+  outline-offset: 0;
+}
+
+.upload-swatch svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.upload-progress {
+  width: 82px;
+  flex: none;
+  padding: 5px 5px 6px;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--ink-2);
+}
+
+.upload-progress progress {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 5px;
+  border: 0;
+  border-radius: 8px;
+  appearance: none;
+  background: rgb(255 250 240 / 0.06);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+
+/* The bar fills the thumbnail space from the bottom edge up, as a thin strip. */
+.upload-progress progress::-webkit-progress-bar {
+  background: linear-gradient(to top, rgb(255 250 240 / 0.12) 4px, transparent 4px);
+}
+
+.upload-progress progress::-webkit-progress-value {
+  background: linear-gradient(to top, var(--accent) 4px, transparent 4px);
+}
+
+.upload-progress progress::-moz-progress-bar {
+  background: linear-gradient(to top, var(--accent) 4px, transparent 4px);
+}
+
+.upload-progress .label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-align: center;
 }
 
 #toast {
@@ -738,8 +837,18 @@ body.hud-hidden :is(#side, #right, #tray, #tooltip) {
     justify-content: space-between;
   }
 
+  /* Tighter, so the Upload button fits at 375 px, even while it says "Uploading…". */
   #toolbar button {
-    padding: 6px 8px;
+    padding: 6px 5px;
+    font-size: 12px;
+  }
+
+  #toolbar .icon {
+    width: 30px;
+  }
+
+  #toolbar .sep {
+    display: none;
   }
 
   #side {

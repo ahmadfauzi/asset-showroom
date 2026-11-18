@@ -33,6 +33,9 @@ import { buildRoom, type BuiltRoom } from './rooms/index';
 import { createSnow } from './snow';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
+import { createLibrary } from './uploads/library';
+import { createUploadsTab } from './uploads/tab';
+import { createUploader } from './uploads/uploader';
 
 // One per room, made the first time the room is needed. It keeps the room's textures, time, snow and undo
 // history while another room shows (PRD 15.6).
@@ -56,6 +59,8 @@ if (!gl) {
   loader.remove();
   document.getElementById('no-webgl')!.style.display = 'block';
 } else {
+  // The uploads in this browser are read before the link, so the link can use their ids (PRD 16.10).
+  const library = await createLibrary();
   const renderer = new WebGLRenderer({ canvas, context: gl });
   // Neutral keeps the textures' own colours: whites stay white and wood stays brown (ACES shifts them toward
   // orange, AgX greys them). It is a little darker than ACES, so the exposure keeps the v1 brightness.
@@ -252,7 +257,23 @@ if (!gl) {
         () => toolbar.toast('Link copied. Anyone who opens it sees this room.'),
         () => toolbar.toast("Couldn't copy the link. Copy it from the address bar instead."),
       ),
+    upload: () => uploader.pick(),
   });
+
+  // Uploads (PRD 16.3, 16.6).
+  const uploadsTab = createUploadsTab({
+    thumb: library.thumb,
+    onUse: () => {},
+    onDelete(meta) {
+      if (!confirm(`Delete ${meta.name}?`)) return;
+      library.remove(meta.id).then(
+        () => uploadsTab.setUploads(library.list()),
+        () => toolbar.toast(`Couldn't delete ${meta.name}. Try again.`),
+      );
+    },
+  });
+  uploadsTab.setUploads(library.list());
+  const uploader = createUploader({ library, tab: uploadsTab, toolbar, renderer, onAdded: () => {} });
 
   // Keys (PRD 6.10). Esc also closes the help dialog, which the browser does itself.
   window.addEventListener('keydown', (event) => {
@@ -524,6 +545,7 @@ if (!gl) {
     daylight.setTime(session.time);
     select(null);
     hud.setRoom(key, session.current);
+    uploadsTab.setRoom(key);
     showSnow();
     save();
     if (loaderDone && gtao.enabled) frame = 0;

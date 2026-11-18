@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -96,6 +96,21 @@ test.describe('set isolation', () => {
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+
+  // The start-up JavaScript before v3: the entry chunk (assets/index-*.js) of `VITE_ASSET_SET=fixture npx vite build`
+  // on commit d83e87d, which has the same code as 64c77f1.
+  const ENTRY_BYTES_V2 = 877165;
+
+  test('upload code is not in the start-up JavaScript', () => {
+    const run = build();
+    expect(run.status, run.stderr).toBe(0);
+    const entry = readFileSync(join(outDir, 'index.html'), 'utf8').match(/<script type="module"[^>]*src="\/(assets\/index-[^"]+\.js)"/)![1];
+    const code = readFileSync(join(outDir, entry));
+    // FBXLoader, EXRLoader, GLTFExporter and fflate's unzip.
+    for (const text of ['Kaydara', 'EXRLoader', 'GLTFExporter', 'invalid zip data']) expect(code.includes(text), text).toBe(false);
+    console.log(`Entry chunk: ${code.length} bytes`);
+    expect(code.length).toBeLessThanOrEqual(ENTRY_BYTES_V2 + 10 * 1024);
   });
 
   test.afterAll(() => rmSync(outDir, { recursive: true, force: true }));

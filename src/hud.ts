@@ -5,6 +5,9 @@ import { accepts, PLACEHOLDER, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from
 
 export const CATEGORIES = { wood: 'Wood', stone: 'Stone and tiles', fabric: 'Fabric and leather', wall: 'Wall finishes', ground: 'Ground' };
 type Category = TextureInfo['category'];
+// The Uploads tab comes last (PRD 16.6).
+const TABS = { ...CATEGORIES, uploads: 'Uploads' };
+type Tab = keyof typeof TABS;
 
 // The texture to drag onto a surface travels in the drag data under this type.
 export const DRAG_TYPE = 'text/x-asset-showroom-texture';
@@ -30,7 +33,7 @@ export function createHud({
 }) {
   let applied: Partial<Record<Slot, TextureInfo>> = {};
   let selected: Slot | null = null;
-  let tab: Category = 'wood';
+  let tab: Tab = 'wood';
 
   const roomButtons = (Object.keys(ROOMS) as RoomKey[]).map((key) => {
     const button = element('button', '', ROOMS[key].name);
@@ -43,9 +46,9 @@ export function createHud({
   // Filled in by setRoom with the room's own surfaces.
   let slotButtons: Partial<Record<Slot, HTMLButtonElement>> = {};
 
-  const tabButtons = {} as Record<Category, HTMLButtonElement>;
-  for (const category of Object.keys(CATEGORIES) as Category[]) {
-    const button = element('button', '', CATEGORIES[category]);
+  const tabButtons = {} as Record<Tab, HTMLButtonElement>;
+  for (const category of Object.keys(TABS) as Tab[]) {
+    const button = element('button', '', TABS[category]);
     button.type = 'button';
     button.addEventListener('click', () => {
       tab = category;
@@ -56,6 +59,7 @@ export function createHud({
   }
 
   const swatches = document.getElementById('swatches')!;
+  const uploadSwatches = document.getElementById('upload-swatches')!;
   const empty = element('div', 'empty', 'No textures in this category yet.');
   swatches.append(empty);
   const swatchButtons = manifest.textures.map((texture) => {
@@ -110,8 +114,9 @@ export function createHud({
     chipText.textContent = selected ? `Textures for the ${SLOT_NAMES[selected].toLowerCase()}` : 'Select a surface to apply a texture';
     chipClear.hidden = !selected;
 
-    for (const [category, button] of Object.entries(tabButtons) as [Category, HTMLButtonElement][]) {
-      button.disabled = !!selected && !accepts(selected, category);
+    // Uploaded textures fit every surface, so the Uploads tab is never dimmed.
+    for (const [category, button] of Object.entries(tabButtons) as [Tab, HTMLButtonElement][]) {
+      button.disabled = category !== 'uploads' && !!selected && !accepts(selected, category);
       button.setAttribute('aria-pressed', String(category === tab));
     }
 
@@ -121,6 +126,8 @@ export function createHud({
       dot.hidden = !inUse.has(texture.slug);
     }
     empty.hidden = swatchButtons.some(({ button }) => !button.hidden);
+    swatches.hidden = tab === 'uploads';
+    uploadSwatches.hidden = tab !== 'uploads';
   }
 
   render();
@@ -138,8 +145,9 @@ export function createHud({
     },
     setSelected(slot: Slot | null) {
       selected = slot;
-      // Jump to the first tab the slot accepts, and scroll it into view where the tabs scroll (narrow screens).
-      if (slot) tab = (Object.keys(CATEGORIES) as Category[]).find((category) => accepts(slot, category))!;
+      // Jump to the first tab the slot accepts, unless the Uploads tab shows, and scroll it into view where the
+      // tabs scroll (narrow screens).
+      if (slot && tab !== 'uploads') tab = (Object.keys(CATEGORIES) as Category[]).find((category) => accepts(slot, category))!;
       render();
       const tabs = tabButtons[tab].parentElement!;
       const { offsetLeft, offsetWidth } = tabButtons[tab];

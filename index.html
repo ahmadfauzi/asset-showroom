@@ -80,6 +80,8 @@
         <span class="sep" aria-hidden="true"></span>
         <button type="button" data-action="save" title="Save a picture of the room">Save picture</button>
         <button type="button" data-action="copy" title="Copy a link to this room">Copy link</button>
+        <button type="button" data-action="upload" title="Upload a .zip with a texture, model or HDRI">Upload</button>
+        <input id="upload-input" type="file" accept=".zip" hidden />
         <span class="sep" aria-hidden="true"></span>
         <button type="button" data-action="help" title="Help (?)" aria-keyshortcuts="?">Help</button>
       </nav>
@@ -129,6 +131,7 @@
       </div>
       <div id="tabs" role="group" aria-label="Texture categories"></div>
       <div id="swatches"></div>
+      <div id="upload-swatches" hidden></div>
     </section>
     <div id="tooltip" hidden><div></div><div class="hint">Click to change</div></div>
     <div id="loader" role="status">Loading the room…</div>
