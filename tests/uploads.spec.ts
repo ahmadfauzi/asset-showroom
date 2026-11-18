@@ -112,9 +112,15 @@ test('switching rooms during an upload still stores it', async ({ page }) => {
   await expect(uploadButton(page)).toBeDisabled();
   await page.locator('#rooms button', { hasText: 'Garden' }).click();
   await expect.poll(() => hash(page)).toContain('room=garden');
+  // The Garden's link while the upload still runs.
+  const before = await hash(page);
+  await expect(uploadButton(page)).toBeDisabled();
   await uploadsTab(page).click();
   await expect(swatches(page)).toHaveCount(1, done);
-  expect(await hash(page)).not.toContain('=u-');
+  await expect(uploadButton(page)).toBeEnabled(done);
+  // No surface key changed, and no upload id went into the link.
+  expect(await hash(page)).toBe(before);
+  expect(before).not.toContain('u-');
   expect(errors).toEqual([]);
 });
 

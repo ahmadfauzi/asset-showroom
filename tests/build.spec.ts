@@ -105,12 +105,17 @@ test.describe('set isolation', () => {
   test('upload code is not in the start-up JavaScript', () => {
     const run = build();
     expect(run.status, run.stderr).toBe(0);
-    const entry = readFileSync(join(outDir, 'index.html'), 'utf8').match(/<script type="module"[^>]*src="\/(assets\/index-[^"]+\.js)"/)![1];
-    const code = readFileSync(join(outDir, entry));
+    // The entry script and every chunk index.html preloads, which is all the JavaScript loaded at start.
+    const html = readFileSync(join(outDir, 'index.html'), 'utf8');
+    const files = [...html.matchAll(/<(?:script type="module"|link rel="modulepreload")[^>]*(?:src|href)="\/(assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+    expect(files.some((file) => file.startsWith('assets/index-'))).toBe(true);
+    const chunks = files.map((file) => ({ file, code: readFileSync(join(outDir, file)) }));
     // FBXLoader, EXRLoader, GLTFExporter and fflate's unzip.
-    for (const text of ['Kaydara', 'EXRLoader', 'GLTFExporter', 'invalid zip data']) expect(code.includes(text), text).toBe(false);
-    console.log(`Entry chunk: ${code.length} bytes`);
-    expect(code.length).toBeLessThanOrEqual(ENTRY_BYTES_V2 + 10 * 1024);
+    for (const { file, code } of chunks) {
+      for (const text of ['Kaydara', 'EXRLoader', 'GLTFExporter', 'invalid zip data']) expect(code.includes(text), `${text} in ${file}`).toBe(false);
+    }
+    const total = chunks.reduce((sum, { code }) => sum + code.length, 0);
+    expect(total, `start-up JavaScript: ${files.join(', ')} = ${total} bytes`).toBeLessThanOrEqual(ENTRY_BYTES_V2 + 10 * 1024);
   });
 
   test.afterAll(() => rmSync(outDir, { recursive: true, force: true }));
