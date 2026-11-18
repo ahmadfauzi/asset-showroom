@@ -1,6 +1,6 @@
 # Asset Showroom PRD
 
-As of 9 Oct 2026, v2 section added 17 Nov 2026 · Ahmad Fauzi · Status: v1 built, v2 draft
+As of 9 Oct 2026, v2 section added 17 Nov 2026, v3 section added 18 Nov 2026 · Ahmad Fauzi · Status: v2 built, v3 draft
 
 Reference: *Set the Mood (sael.net/interior) Replication Knowledge Base*, 7 Oct 2026. "The reference" below means that site.
 
@@ -80,6 +80,17 @@ Added on 17 Nov 2026. These change decisions 4 and 10 for v2 onwards. Section 15
 | 26 | Look | The HUD's colours, fonts, panels and motion may change freely, as long as they stay neutral with no Poliigon branding |
 | 27 | Model tooling | `@gltf-transform/cli` as a dev dependency to shrink and compress models at build time |
 
+Added on 18 Nov 2026 for v3. Section 16 has the detail.
+
+| # | Topic | Decision |
+| --- | --- | --- |
+| 28 | Uploads | Anyone can upload a .zip with a texture, a model or an HDRI. The app works out which it is. One zip at a time |
+| 29 | Storage | Uploads are shrunk once and kept in the browser (IndexedDB). The original zip is not kept. Nothing leaves the browser |
+| 30 | Uploaded textures | Fit every surface, ignoring the accept lists. Size starts at 100 × 100 cm and can be changed |
+| 31 | Uploaded models | Placed on any upward-facing surface, moved by dragging, turned in 15° steps. Up to 10 per room. No resizing |
+| 32 | HDRI | Garden only. It replaces the drawn sky and its light, and the clock is greyed out while it shows |
+| 33 | Share link | Holds upload ids. The same browser restores them. Other browsers show the defaults and a toast |
+
 ## 5. Scope by version
 
 | Version | Contents |
@@ -89,7 +100,7 @@ Added on 17 Nov 2026. These change decisions 4 and 10 for v2 onwards. Section 15
 | v3 | Uploads: textures, models (placed and moved by drag and drop) and HDRIs, saved in the browser |
 | v4 | Move, turn, add and remove built-in furniture; 3 room recipes (texture and time combinations); mood meter with explanation sentence; cinematic camera |
 
-Sections 6 to 14 specify v1. Section 15 specifies v2. v3 and v4 get their own sections before work starts.
+Sections 6 to 14 specify v1. Section 15 specifies v2. Section 16 specifies v3. v4 gets its own section before work starts.
 
 ## 6. v1 functional requirements
 
@@ -552,3 +563,207 @@ Manual: frame rate in each room on one MacBook and one Windows laptop with integ
 | --- | --- |
 | Free grass and snow textures, so the free set has a `garden/ground` default and `npm run textures -- free` passes | Ahmad |
 | Manual frame rate check on one MacBook (15.13). Only a Windows laptop with integrated graphics has been checked. | Ahmad |
+
+## 16. v3: Uploads
+
+Settled in the grilling session on 18 Nov 2026. Where this section differs from sections 6 to 15, this section wins for v3.
+
+### 16.1 Why
+
+People want to see their own assets in the rooms: a texture they downloaded, a model or a sky. Today the showroom only shows the bundled textures and decor.
+
+### 16.2 Goals and non-goals
+
+**Goals**
+
+- Anyone can upload a .zip and use what is in it in the room they are in, straight away.
+- Uploads stay in the browser after a reload, and work in every room.
+- First load and frame rate stay within the targets in sections 10 and 15.12.
+
+**Non-goals for v3**
+
+- Sending uploads anywhere. There is no server. A share link can't carry an upload to another browser.
+- Resizing models, or moving built-in furniture (v4).
+- HDRIs indoors. Indoor rooms keep the generated room environment (15.8).
+- `.blend`, `.max`, `.c4d`, `.ma`, `.obj` and `.usdz` files.
+- Opacity, displacement, subsurface and reflection maps. They are ignored.
+- Local storage of room state. Section 6.8 still applies: uploads are stored, but which surface shows what is only in the link.
+
+### 16.3 Uploading
+
+- An Upload button in the toolbar opens the file picker for one `.zip`. You can also drop a `.zip` anywhere on the page. Phones use the file picker.
+- One zip at a time. While an upload runs, the room stays usable, the Upload button shows "Uploading…" and is disabled, and dropping another zip shows "Wait for the current upload to finish."
+- The upload shows as a card with a progress bar in the Uploads tab (16.6) until it is done.
+- The name comes from the zip's file name without `.zip`. Names can't be changed.
+- On the first upload, the app calls `navigator.storage.persist()`, so the browser keeps uploads when space runs low. Safari can still clear them after 7 days without a visit. The help modal says uploads are kept in this browser only.
+
+Limits:
+
+| Limit | Value | Message |
+| --- | --- | --- |
+| Zip size | 250 MB | "This zip is over 250 MB." |
+| Unzipped size, all files | 1 GB | "This zip unpacks to more than 1 GB." |
+| Model triangles | 500,000 | "This model has more than 500,000 triangles." |
+| HDRI size | 8192 × 4096 | "HDRIs up to 8K only." |
+| Browser storage full | quota | "Your browser is out of space for uploads. Delete some in Uploads and try again." |
+| Decoding runs out of memory | | "This file is too big for this device." |
+
+The zip's file list is read before anything is unpacked, so the size checks and the kind (16.4) are known first.
+
+### 16.4 Working out the kind
+
+The app checks the file names in the zip in this order. A file name is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Files with "preview" in the name are ignored.
+
+1. A `.glb`, `.gltf` or `.fbx` file: a model. If there are several, the largest is used.
+2. Otherwise, a `.blend`, `.max`, `.c4d` or `.ma` file: "Export it as .glb or .fbx first."
+3. Otherwise, an image with a colour word in its name (`basecolor`, `albedo`, `diffuse`, `col`): a texture.
+4. Otherwise, an `.exr` or `.hdr` file: an HDRI. `.exr` wins over `.hdr`, then the largest.
+5. Otherwise: "This zip has no texture, model or HDRI we can read."
+
+Scene files come before textures because model zips such as the Monstera carry colour maps next to the `.blend`. Textures come before HDRIs because Poliigon textures can include a displacement `.exr`. Checked with a script that runs these rules on the file lists of the four example zips from 17 Nov 2026: `Poliigon_StoneQuartzite_8060.zip` is a texture, `PlantOrchid001.zip` is a model, `HdrSkySunset007.zip` is an HDRI and `PlantMonstera001.zip` gets the export message.
+
+### 16.5 Processing and storage
+
+Each upload is processed once. Only the result is stored, never the zip. Uploads are kept in IndexedDB, in one store, with an id such as `u-3f9a1c0e`, the kind, the name, the date, the size in bytes, a 256 px thumbnail and the files below.
+
+**Texture**
+
+| Map | Names | Stored as |
+| --- | --- | --- |
+| Colour | The colour words in 16.4 | 2K, sRGB |
+| Normal | `normal`, `nrm`, `nor` | 1K. Green is flipped if the file name contains `DX` in capitals, the same test as the texture script (7.3) |
+| AO, roughness, metalness | `ambientocclusion`, `ao`, `occlusion`; `roughness`, `rough`; `metallic`, `metalness`, `metal` | Packed into one 2K map: AO in red, roughness in green, metalness in blue (7.3) |
+
+- `gloss` or `glossiness` maps become roughness (1 minus gloss).
+- A missing AO map counts as white, a missing metalness map as black and a missing roughness map as mid-grey.
+- Maps are stored as WebP where the browser can write it, otherwise PNG. They are not KTX2, so each uploaded texture uses more GPU memory than a bundled one (about 22 MB for the 2K colour map with mipmaps).
+- The `.mtlx` file has no real-world size (the quartzite one only has a UV tiling of 2), so the size starts at 100 × 100 cm (16.7).
+
+**Model**
+
+- `.fbx` is read with three.js `FBXLoader`. Its `UnitScaleFactor` sets the scale: 1.0 means centimetres. `FBXLoader` does not do this itself. Checked: without it, the orchid loads 100 times too big (24.9 × 42.8 × 14.9 units, which is 42.8 cm tall).
+- `.glb` and `.gltf` are read with `GLTFLoader` and are in metres. A `.gltf` takes its `.bin` and images from the same zip.
+- If the result is taller than 4 m or shorter than 2 cm, it is resized to 1 m tall and a toast says "This model's size looked wrong, so it's now 1 m tall."
+- Separate maps in the zip are matched to materials by the same words as textures. If the zip has maps for more than one name prefix (for example `PlantMonsteraVase001_…`), each set goes to the material or mesh with that name. If there is one set, it goes to every material. Checked: the orchid's two meshes share one material.
+- Materials become `MeshStandardMaterial`. Gloss becomes roughness. `REFL`, `SSS` and specular maps are ignored.
+- Maps are scaled to 1K. The model is stored as one `.glb` written with three.js `GLTFExporter`.
+- The thumbnail is a 256 px render of the model.
+
+**HDRI**
+
+- `.exr` is read with `EXRLoader` and `.hdr` with `HDRLoader`, inside a Worker, so the page doesn't freeze. Checked in Node: the 8K example (8192 × 4096, PIZ compression) took 6.4 s and 634 MB of memory to decode.
+- It is scaled to 2048 × 1024 and stored as an `.exr` written with `EXRExporter` (half float).
+- The brightest spot is found at upload and stored with it, for the sun (16.9).
+- The thumbnail is a 256 px tone-mapped picture.
+
+### 16.6 Uploads tab
+
+- The tray gets a last tab, "Uploads". It lists every upload, newest first. One library is shared by all rooms.
+- Each swatch has its thumbnail, a small icon for its kind (texture, model, sky) and a Delete button. Hovering or focusing shows the name.
+- The Uploads tab is never dimmed when a surface is selected, because uploaded textures fit every surface.
+- Sky swatches can only be used in the Garden. In other rooms they are greyed out and say "Skies work in the Garden."
+- Empty tab: "Upload a .zip with a texture, a model or an HDRI. It stays in this browser."
+- Delete asks first. If the upload is in use, it says where, for example "Used in 2 rooms. Delete it?". After a delete, surfaces that used it go back to the room's default, placed copies are removed, the Garden goes back to the drawn sky, and undo steps skip it. The delete itself can't be undone.
+
+### 16.7 Uploaded textures
+
+- They apply the same way as bundled ones (6.3): select a surface and click, or drag onto a surface. Any surface accepts them. The spread animation works the same way.
+- The texture card shows the name, "Uploaded texture", and width and height fields in cm (10 to 1000). There is no "View asset" link.
+- Changing the size changes the upload everywhere it is used, in every room. It is not an undo step.
+- Triplanar surfaces such as the rocks use the size the same way as bundled textures.
+
+### 16.8 Uploaded models
+
+**Placing**
+
+- Drag a model swatch onto the room: it stands on the surface under the drop point.
+- Click it, or press Enter on it: it stands on the surface in the middle of the view. If that is not an upward-facing surface (a wall, or the sky), it stands in the middle of the room's floor, or the Garden's lawn.
+- It can stand on any upward-facing surface: floor, ground, table tops, the deck. There are no collision checks, so it can overlap furniture.
+- Each room holds up to 10 placed models. The same upload can be placed more than once. The 11th shows "This room has 10 models. Remove one first."
+- Placed models cast and receive shadows.
+
+**Selecting, moving and turning**
+
+- Clicking or tapping a placed model selects it and outlines it. A new model is selected as soon as it is placed. Hovering shows "<name> · drag to move".
+- Pressing on a placed model and dragging moves it. It follows the upward-facing surface under the pointer, so it can go from the floor onto a table. Pressing anywhere else still orbits. Touch works the same way.
+- A selected model shows a small bar next to it: Turn left, Turn right, Remove.
+- Keys while a model is selected: the arrows move it 10 cm (up and down move it away from and towards the camera), `Q` and `E` turn it 15°, Delete or Backspace removes it, Esc deselects it. None of these clash with the keys in 6.10.
+- Placed models are listed under the surfaces in the slot panel ("PlantOrchid001 1", "PlantOrchid001 2"), so Tab and Enter can select them. On narrow screens, where that panel hides, you tap the model.
+- Placing, one drag, each key press, each Turn button press and Remove are each one undo step in the room's history (15.6).
+- Models keep the size from 16.5. There is no size control in v3.
+
+### 16.9 HDRI sky
+
+- Clicking a sky swatch in the Garden makes that HDRI the sky. It is the background and lights the scene through the environment map, in place of the drawn sky.
+- The sun light moves to the HDRI's brightest spot and takes its colour, so shadows match the picture.
+- The clock and the presets are greyed out, with the note "The HDRI sets the light." Stars and path lights are off. The snow switch still works.
+- The time slider becomes a "Turn sky" slider, 0 to 360°. The sun turns with the sky.
+- A "Time of day" button goes back to the drawn sky and the clock.
+- Choosing a sky, turning it and going back to time of day are each one undo step. `[` and `]` do nothing while an HDRI shows.
+
+### 16.10 Share link and undo
+
+Undo compares link strings (`src/history.ts`), so every undo step must be in the link. The link stays `v=2`. The new keys are optional, so every older link still works.
+
+| Key | Example | Meaning |
+| --- | --- | --- |
+| Surface keys | `floor=u-3f9a1c0e` | An uploaded texture on that surface |
+| `m` | `m=u-7c21d4aa,1.20,0.75,0.45,90` | A placed model: upload id, x, y, z in metres (2 decimals) and turn in degrees. One `m` per model, in placing order |
+| `sky` | `sky=u-91be03f2` | The Garden's HDRI sky. Garden only |
+| `sr` | `sr=135` | The sky's turn in degrees. Only with `sky` |
+
+- In the browser that holds the uploads, the link restores everything. The app reads the upload ids from IndexedDB before it reads the link.
+- In any other browser, or after the upload is deleted, those surfaces show their defaults, models and the HDRI sky are left out, and a toast says: "This link uses uploads that are only on the sender's computer, so you see the defaults."
+- Upload ids that this browser doesn't have don't count toward the "Some textures in this link aren't available" toast (6.8), so only one toast shows.
+- When the room uses uploads, Copy link says "Link copied. Uploads only show in this browser." instead of the usual toast.
+- Malformed values are ignored, as in 6.8. Any `m` after the 10th is ignored.
+
+### 16.11 Loading and performance
+
+- Upload code (`FBXLoader`, `EXRLoader`, `HDRLoader`, `GLTFExporter`, `EXRExporter`, `fflate`) loads only when you first upload, or when the link or library needs it. It adds nothing to first load. `fflate` comes with three.js, so there is no new dependency.
+- First load stays as measured in 15.12. Measure `dist/assets` before and after v3. The JavaScript loaded at start may grow by no more than 10 KB.
+- Uploads come from IndexedDB, not the network, so they don't count toward the 15 MB budget. The loader waits for the uploads the link uses, as it waits for the room's textures.
+- The 60 and 30 fps targets apply with 10 placed models. Checked: the orchid has 263,960 triangles. GTAO still turns off first under 30 fps.
+
+### 16.12 Safety
+
+- Zips are untrusted. Only the file list and the needed files are read. Nothing from a zip is run or inserted as HTML. Names are set with `textContent`.
+- The unzipped-size cap (16.3) stops zip bombs.
+- The Poliigon example zips never go into this public repo. Tests use small generated files.
+
+### 16.13 Testing
+
+Playwright, with small fixture files made by a script (tiny images, a small `.glb`, a small hand-written ASCII `.fbx` in centimetres, a small `.hdr` and `.exr`):
+
+- Each kind is detected, and a `.blend`-only zip gets the export message.
+- The limits in 16.3 show their messages. The zip size check uses a large empty file made in the page.
+- A second zip during an upload shows the wait toast.
+- An uploaded texture applies to any surface, is in the hash, and comes back after a reload.
+- The size fields change the texture's repeat.
+- A link with upload ids in a fresh browser context shows the defaults and the toast.
+- Placing, dragging, keys, Turn buttons and Remove each make one undo step, and the hash matches.
+- The 11th model is refused.
+- In the Garden, an HDRI sky greys out the clock, Turn sky is in the hash, and Time of day goes back.
+- Sky swatches are greyed out indoors.
+- Deleting an upload that is in use resets the surfaces and removes its models.
+- A full quota (forced in the test) shows the message.
+
+Build: the start-up JavaScript doesn't include the upload code (no `FBXLoader` or `EXRLoader` in the entry chunk).
+
+Manual: the four example zips in Chrome, Edge, Safari and Firefox on desktop; one phone; frame rate with 10 orchids on the Windows laptop.
+
+### 16.14 Milestones
+
+1. Upload basics: IndexedDB store, reading the zip's file list, working out the kind, limits and messages, processing and storing textures (map matching and packing), Upload button and page drop, one at a time, Uploads tab with progress cards and delete. Upload code loads on demand.
+2. Uploaded textures: share link keys for uploads, any surface, size fields, link and undo, restore from the link.
+3. Uploaded models: FBX and glTF import, scale, materials, thumbnail; place, select, move, turn, remove, slot panel list, keys, touch, cap of 10, link and undo.
+4. HDRI sky: decoding in a Worker, 2K storage, brightest spot, Garden sky and sun, greyed clock, Turn sky, link and undo.
+5. Finish: deleting uploads in use, quota and persist, help text, narrow screens, performance pass with 10 models, tests, manual check with the example zips.
+
+### 16.15 Open questions
+
+| Question | Owner |
+| --- | --- |
+| Can phones decode an 8K EXR, or should phones get a lower HDRI limit? Check on one phone in milestone 4. | Ahmad |
+| Is 100 × 100 cm the right starting size for uploaded textures? | Ahmad |
+| Do 10 orchids (about 2.6 million triangles) hold 30 fps on the Windows laptop? If not, lower the cap or the triangle limit. Check in milestone 5. | Ahmad |
