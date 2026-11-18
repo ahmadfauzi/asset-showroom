@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { expect, test, type Page } from '@playwright/test';
 
 // Upload tests from PRD section 16, against the fixture set. Each test has its own browser context, so its own
@@ -7,8 +8,8 @@ import { expect, test, type Page } from '@playwright/test';
 const open = async (page: Page, hash = '') => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  // Missing files are the v2 tests' job. In a git worktree, Vite also refuses the font from the parent node_modules.
-  page.on('console', (message) => message.type() === 'error' && !message.text().startsWith('Failed to load resource') && errors.push(message.text()));
+  // In a git worktree, Vite refuses the font from the parent node_modules with a 403.
+  page.on('console', (message) => message.type() === 'error' && !message.location().url.includes('@fontsource') && errors.push(message.text()));
   await page.goto(`/${hash}`);
   await expect(page.locator('#loader')).toHaveClass(/done/);
   return errors;
@@ -25,6 +26,8 @@ const swatches = (page: Page) => page.locator('.upload-swatch');
 // On SwiftShader the frame loop and canvas encodes can stall for 20 to 40 s while the other rooms load, so an
 // upload can take over a minute.
 const done = { timeout: 150_000 };
+// Every test that waits for an upload gets three times the usual time.
+const waitsForUpload = () => test.slow();
 
 // Makes each image encode take `ms`, so an upload stays busy for a while.
 const slowEncode = (page: Page, ms: number) =>
@@ -37,6 +40,7 @@ const slowEncode = (page: Page, ms: number) =>
   }, ms);
 
 test('an uploaded texture zip shows in the Uploads tab', async ({ page }) => {
+  waitsForUpload();
   const errors = await open(page);
   await upload(page, 'texture-metal.zip');
   await uploadsTab(page).click();
@@ -76,7 +80,7 @@ test('a zip over 250 MB is refused', async ({ page }) => {
 });
 
 test('one upload at a time', async ({ page }) => {
-  test.slow();
+  waitsForUpload();
   await slowEncode(page, 2000);
   await open(page);
   await upload(page, 'texture-metal.zip');
@@ -101,7 +105,7 @@ test('one upload at a time', async ({ page }) => {
 });
 
 test('switching rooms during an upload still stores it', async ({ page }) => {
-  test.slow();
+  waitsForUpload();
   await slowEncode(page, 1000);
   const errors = await open(page);
   await upload(page, 'texture-metal.zip');
@@ -115,6 +119,7 @@ test('switching rooms during an upload still stores it', async ({ page }) => {
 });
 
 test('the first upload asks the browser to keep uploads', async ({ page }) => {
+  waitsForUpload();
   await page.addInitScript(() => {
     const counted = window as unknown as { persistCalls: number };
     counted.persistCalls = 0;
@@ -133,6 +138,7 @@ test('the first upload asks the browser to keep uploads', async ({ page }) => {
 });
 
 test('deleting an upload asks first', async ({ page }) => {
+  waitsForUpload();
   await open(page);
   await upload(page, 'texture-metal.zip');
   await uploadsTab(page).click();
@@ -167,8 +173,12 @@ test('the empty Uploads tab says what to upload', async ({ page }) => {
 });
 
 test('at 375 px the toolbar fits while uploading', async ({ page }) => {
+  // A worktree can't serve the font from the parent node_modules, so serve it here: the fit depends on it.
+  await page.route('**/inter-latin-wght-normal.woff2', (route) =>
+    route.fulfill({ path: createRequire(import.meta.url).resolve('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2'), contentType: 'font/woff2' }));
   await page.setViewportSize({ width: 375, height: 812 });
   await open(page);
+  await page.evaluate(() => document.fonts.ready);
   // The longest text the Upload button shows.
   await uploadButton(page).evaluate((button) => (button.textContent = 'Uploading…'));
   const right = await page.locator('#toolbar button').evaluateAll((buttons) => Math.max(...buttons.map((b) => b.getBoundingClientRect().right)));

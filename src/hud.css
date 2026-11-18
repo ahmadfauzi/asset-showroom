@@ -833,14 +833,15 @@ body.hud-hidden :is(#side, #right, #tray, #tooltip) {
     align-items: stretch;
   }
 
+  /* Tighter, so the Upload button fits at 375 px, even while it says "Uploading…". */
   #toolbar {
     justify-content: space-between;
+    gap: 0;
   }
 
-  /* Tighter, so the Upload button fits at 375 px, even while it says "Uploading…". */
   #toolbar button {
     padding: 6px 5px;
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   #toolbar .icon {
