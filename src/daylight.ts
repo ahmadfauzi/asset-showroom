@@ -223,7 +223,7 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
       room = next;
       setTime(time);
       // The mirrors are known once the models load.
-      void next.models.then(() => room === next && setTime(time));
+      next.models.then(() => room === next && setTime(time)).catch(console.error);
     },
     // Call once per frame.
     update() {

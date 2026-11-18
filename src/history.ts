@@ -1,4 +1,4 @@
-// Undo history for one room. Each commit stores a full copy of the state.
+// Undo history for one room. Each commit stores the state it is given, so the caller passes a fresh copy.
 // The history is mutated in place.
 export type History<T> = { past: T[]; committed: T; future: T[] };
 

@@ -262,8 +262,8 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
     { rotY = 0, scale = 1, slot, mirror = false }: { rotY?: number; scale?: number; slot?: Slot; mirror?: boolean } = {},
   ) => {
     loading.push(
-      loadModel(id, ktx2).then(
-        (model) => {
+      loadModel(id, ktx2)
+        .then((model) => {
           model.position.set(x, y, z);
           model.rotation.y = rotY;
           model.scale.setScalar(scale);
@@ -280,12 +280,11 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
             mesh.material = surface;
             mesh.userData.slot = slot;
           }
-        },
-        (error) => {
+        })
+        .catch((error) => {
           console.warn(error);
           failed.push(id);
-        },
-      ),
+        }),
     );
   };
 

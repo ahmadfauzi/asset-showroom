@@ -363,3 +363,29 @@ for (const key of ['living', 'bedroom', 'bathroom', 'garden']) {
     expect(picture).toMatchSnapshot(`${key}-fixture.png`, { maxDiffPixelRatio: 0.02 });
   });
 }
+
+test('with reduced motion, switching rooms never shows the fade', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const errors = await open(page);
+  await page.evaluate(() => {
+    const fade = document.getElementById('fade')!;
+    (window as any).fadeWasOn = fade.classList.contains('on');
+    new MutationObserver(() => ((window as any).fadeWasOn ||= fade.classList.contains('on'))).observe(fade, { attributes: true });
+  });
+  await room(page, 'Bedroom').click();
+  await expect(room(page, 'Bedroom')).toHaveAttribute('aria-pressed', 'true');
+  await room(page, 'Garden').click();
+  await expect(room(page, 'Garden')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => (window as any).fadeWasOn)).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('the tray tab follows the room', async ({ page }) => {
+  const errors = await open(page, '#v=2&room=garden');
+  await tab(page, 'Ground').click();
+  await expect(tab(page, 'Ground')).toHaveAttribute('aria-pressed', 'true');
+  await room(page, 'Bedroom').click();
+  await expect(room(page, 'Bedroom')).toHaveAttribute('aria-pressed', 'true');
+  await expect(tab(page, 'Wood')).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
+});

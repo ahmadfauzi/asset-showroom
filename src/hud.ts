@@ -152,6 +152,8 @@ export function createHud({
     // Shows the room's surfaces and marks its button. `roomApplied` is the room's own record, kept by the caller.
     setRoom(room: RoomKey, roomApplied: Partial<Record<Slot, TextureInfo>>) {
       applied = roomApplied;
+      // The tray starts on the first category any of the room's surfaces accepts.
+      tab = (Object.keys(CATEGORIES) as Category[]).find((category) => (ROOMS[room].slots as Slot[]).some((slot) => accepts(slot, category)))!;
       for (const { key, button } of roomButtons) button.setAttribute('aria-pressed', String(key === room));
       slotButtons = {};
       const list = document.getElementById('slot-list')!;

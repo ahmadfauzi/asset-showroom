@@ -306,8 +306,9 @@ if (!gl) {
   resize();
 
   // After the loader hides, time frames 30 to 150. Under 30 fps, turn GTAO off, the first step in PRD 10.
-  // The count restarts if the tab is hidden, since hidden tabs get few frames.
+  // The count restarts if the tab is hidden, since hidden tabs get few frames, and when another room shows.
   let frame = -1;
+  let loaderDone = false;
   let timedFrom = 0;
   document.addEventListener('visibilitychange', () => frame >= 0 && (frame = 0));
   const timeFrames = () => {
@@ -458,7 +459,7 @@ if (!gl) {
         session.history.committed = snapshot(session);
         if (session === active) save();
       }
-      toolbar.toast(`Couldn't load ${texture.name}. Try again.`);
+      if (session === active) toolbar.toast(`Couldn't load ${texture.name}. Try again.`);
       return;
     } finally {
       waiting.delete(texture.slug);
@@ -488,7 +489,7 @@ if (!gl) {
       history: createHistory<RoomState>({ textures: {}, time, snow }), // replaced below, once the picks are in
       time,
       snow,
-      loads: [built.models.then((failed) => failed.length && toolbar.toast("Couldn't load some decor. The room still works."))],
+      loads: [built.models.then((failed) => failed.length && session === active && toolbar.toast("Couldn't load some decor. The room still works."))],
     };
     const picks = { ...(manifest.defaults[key] ?? {}), ...(fromLink ? link.textures : {}) };
     for (const [slot, slug] of Object.entries(picks) as [Slot, string][]) {
@@ -525,6 +526,7 @@ if (!gl) {
     hud.setRoom(key, session.current);
     showSnow();
     save();
+    if (loaderDone && gtao.enabled) frame = 0;
   };
 
   // The room fades out and back in, 0.25 s each way (the same as #fade in hud.css). The last room clicked
@@ -543,6 +545,9 @@ if (!gl) {
     }
     try {
       if (key !== active.built.key) swap(key);
+    } catch (error) {
+      console.error(error);
+      wanted = active.built.key;
     } finally {
       fade.classList.remove('on');
     }
@@ -559,6 +564,7 @@ if (!gl) {
   Promise.allSettled(tasks).then(async () => {
     requestAnimationFrame(() => {
       loader.classList.add('done');
+      loaderDone = true;
       frame = 0;
     });
     if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");

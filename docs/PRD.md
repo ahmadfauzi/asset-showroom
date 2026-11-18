@@ -112,7 +112,7 @@ Sections 6 to 14 specify v1. Section 15 specifies v2. v3 and v4 get their own se
 | `accents` | Accents | Fabric and leather | Cushions, pouf, throws |
 | `bedding` | Bedding | Fabric and leather | Bed |
 | `rugs` | Rugs | Fabric and leather | Rugs |
-| `woodwork` | Woodwork | Wood, Stone and tiles | Tables, shelves, sideboard, doors |
+| `woodwork` | Woodwork | Wood, Stone and tiles | Tables, sideboard, dresser |
 
 ### 6.3 Applying textures
 
@@ -444,7 +444,7 @@ New surface keys and what they accept. The keys from section 6.2 keep their mean
 - New category `ground`, shown as "Ground": grass, snow, soil, gravel.
 - The tray gets a fifth tab.
 - The manifest gives a default texture per room and per surface. The set check (7.3) runs per room: every surface in every room needs a texture it accepts and a valid default.
-- The free set has 5 textures: Ash Wood Board (wood), Bouclé, Bubbly Rows (fabric), Denali Quartzite and Ivory Ceramic Tile (stone and tiles), and Painted Plaster (wall). It has defaults for every surface except `garden/ground`, because it has no ground texture. Ahmad still needs to add free grass and snow textures. Until then `npm run textures -- free` stops at the set check with `garden/ground`, and building and testing use the fixture set, which has plain-colour ground textures.
+- The free set has 5 textures: Ash Wood Board (wood), Bouclé, Bubbly Rows (fabric), Denali Quartzite and Ivory Ceramic Tile (stone and tiles), and Painted Plaster (wall). It has defaults for every surface except `garden/ground`, because it has no ground texture. Ahmad still needs to add free grass and snow textures. Until then `npm run textures -- free` stops at the set check with `garden/ground`, and testing uses the fixture set, which has plain-colour ground textures.
 - Each room's defaults reuse the same few textures, so a room loads each texture once.
 
 ### 15.6 Switching rooms
@@ -470,11 +470,11 @@ New surface keys and what they accept. The keys from section 6.2 keep their mean
 - The clock, slider, presets and keys from 6.5 work the same in every room.
 - Indoor rooms: sunlight through the windows, lamps after sunset, windows go dark at night. Indoor reflections come from a generated room environment (three.js `RoomEnvironment`).
 - Garden: a sky drawn by code (three.js `Sky`) that follows the sun and also lights the scene. Stars come out after sunset. Path lights come on at sunset. v3's HDRI upload will be able to replace the sky.
-- Snow switch: shown in the daylight panel in the Garden only. It turns falling snowflakes on and off. It is in the share link and in undo. With `prefers-reduced-motion`, the flakes stay still. Snow on the ground comes from applying a snow texture to the Ground surface.
+- Snow switch: shown in the daylight panel in the Garden only (at 900 px and below it sits in the tray). It turns falling snowflakes on and off. It is in the share link and in undo. With `prefers-reduced-motion`, the flakes stay still. Snow on the ground comes from applying a snow texture to the Ground surface.
 
 ### 15.9 Furniture
 
-- Code-built pieces for every surface you can retexture: sofa, armchair, chairs, cushions, bed, bedding, rugs, tables, shelves, sideboard, dresser, bathtub, basin, vanity, toilet, towels, deck, fence, path. They get rounded edges, separate cushions and mattresses, tapered legs and similar detail, so none of them reads as a plain box.
+- Code-built pieces for every surface you can retexture: sofa, armchair, chairs, cushions, bed, bedding, rugs, tables, sideboard, dresser, bathtub, basin, vanity, toilet, towels, deck, fence, path. They get rounded edges, separate cushions and mattresses, tapered legs and similar detail, so none of them reads as a plain box.
 - Poly Haven CC0 models for decor that isn't a surface: plants, shrubs, the bathroom mirror, the garden bench or table set. Rocks are Poly Haven models too, but they are also the Rocks surface.
 - The Garden's Cushions surface is code-built seat pads and cushions on the bench or table set.
 - The Bedroom desk chair's seat and back are part of the Accents surface.
