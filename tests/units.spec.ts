@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 // Runs a function in the browser after loading a static file on the same origin.
@@ -118,4 +119,33 @@ test('uploads: a full quota gives the PRD message and leaves nothing behind', as
     return { message, listed: (await s.listUploads()).length };
   });
   expect(r).toEqual({ message: 'Your browser is out of space for uploads. Delete some in Uploads and try again.', listed: 0 });
+});
+
+test('uploads: texture processing packs ORM and flips DX normals', async ({ page }) => {
+  const zip = (name: string) => [...readFileSync(`tests/fixtures/uploads/${name}`)];
+  const r = await run(page, async () => {}).then(() => page.evaluate(async ([metal, gloss]) => {
+    const z = await import('/src/uploads/zip.ts');
+    const t = await import('/src/uploads/texture.ts');
+    const d = await import('/src/uploads/detect.ts');
+    const pixel = async (blob: Blob) => {
+      const bitmap = await createImageBitmap(blob);
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(bitmap, 0, 0);
+      return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    };
+    const process = async (bytes: number[]) => {
+      const data = new Uint8Array(bytes);
+      const names = z.listZip(data).map((e) => e.name).filter((n) => d.mapRole(n));
+      const { files, thumb } = await t.processTexture(await z.readZip(data, names));
+      return { orm: await pixel(files.orm), normal: await pixel(files.normal), color: await pixel(files.color), thumb: (await createImageBitmap(thumb)).width };
+    };
+    return { metal: await process(metal), gloss: await process(gloss) };
+  }, [zip('texture-metal.zip'), zip('texture-gloss.zip')]));
+  const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) <= 6);
+  expect(near(r.metal.orm, [255, 64, 255])).toBe(true);
+  expect(near(r.metal.normal, [128, 127, 255])).toBe(true); // green 128 flipped is 127
+  expect(near(r.metal.color, [200, 100, 50])).toBe(true);
+  expect(near(r.gloss.orm, [255, 63, 0])).toBe(true); // roughness = 255 - 192
+  expect(r.metal.thumb).toBe(64); // never scaled up past the source
 });
