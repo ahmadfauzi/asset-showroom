@@ -287,8 +287,8 @@ if (!gl) {
 
   // Keys (PRD 6.10). Esc also closes the help dialog, which the browser does itself.
   window.addEventListener('keydown', (event) => {
-    // Keys typed in a field, such as an uploaded texture's size, stay in the field.
-    if ((event.target as Element).closest?.('input,textarea,select,[contenteditable]')) return;
+    // Keys typed in a field, such as an uploaded texture's size, stay in the field. The time slider isn't one.
+    if ((event.target as Element).closest?.('input:not([type=range]),textarea,select,[contenteditable]')) return;
     if (event.key === 'Escape') return select(null);
     if (toolbar.help.open || event.altKey) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {

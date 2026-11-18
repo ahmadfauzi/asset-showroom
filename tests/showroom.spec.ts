@@ -102,6 +102,17 @@ test('undo and redo cover texture and time changes', async ({ page }) => {
   await expect(redo).toBeDisabled();
 });
 
+test('undo works while the time slider has focus', async ({ page }) => {
+  await open(page);
+  const slider = page.getByRole('slider', { name: 'Time of day' });
+  await slider.focus();
+  await slider.press('ArrowRight');
+  await expect.poll(() => hash(page)).toContain('t=12.25');
+  await slider.press('Control+z');
+  await expect.poll(() => hash(page)).toMatch(/t=12$/);
+  await expect(slider).toBeFocused();
+});
+
 test('keys from PRD 6.10', async ({ page }) => {
   await open(page);
 
