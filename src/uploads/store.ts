@@ -35,7 +35,7 @@ async function transact<T = void>(mode: IDBTransactionMode, fn: (meta: IDBObject
   });
 }
 
-export const newId = () => `u-${crypto.randomUUID().slice(0, 8)}`;
+export const newId = () => `u-${[...crypto.getRandomValues(new Uint8Array(4))].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 
 export function putUpload(upload: Upload) {
   const { files, ...meta } = upload;
