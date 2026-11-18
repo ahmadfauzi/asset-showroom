@@ -528,12 +528,14 @@ if (!gl) {
   };
 
   // The room fades out and back in, 0.25 s each way (the same as #fade in hud.css). The last room clicked
-  // wins, even while an earlier switch is still fading.
+  // wins, even while an earlier switch is still fading. Clicking the room that shows during a fade cancels the
+  // switch: the fade goes back and nothing swaps.
   const fade = document.getElementById('fade')!;
   let wanted = link.room;
   const showRoom = async (key: RoomKey) => {
     if (key === wanted) return;
     wanted = key;
+    if (key === active.built.key) return void fade.classList.remove('on');
     if (!reducedMotion) {
       fade.classList.add('on');
       await new Promise((resolve) => setTimeout(resolve, 250));
