@@ -82,3 +82,40 @@ test('uploads: map roles and size limits', async ({ page }) => {
   expect(r.words).toEqual(['poliigon', 'stone', 'quartzite', '8060', 'basecolor', 'jpg']);
   expect(r).toMatchObject({ ok: 'ok', bigZip: 'This zip is over 250 MB.', bigUnzipped: 'This zip unpacks to more than 1 GB.' });
 });
+
+test('uploads: store round trip, newest first, delete', async ({ page }) => {
+  const r = await run(page, async () => {
+    const s = await import('/src/uploads/store.ts');
+    const blob = new Blob(['x']);
+    const upload = (id: string, created: number) => ({ id, kind: 'texture' as const, name: id, created, bytes: 3, thumb: blob, sizeCm: [100, 100] as [number, number], files: { color: blob, normal: blob, orm: blob } });
+    await s.putUpload(upload('u-00000001', 1));
+    await s.putUpload(upload('u-00000002', 2));
+    await s.setSize('u-00000001', [50, 75]);
+    const listed = (await s.listUploads()).map((m) => [m.id, m.sizeCm]);
+    const files = await s.getFiles('u-00000002');
+    await s.deleteUpload('u-00000002');
+    return { listed, hasFiles: !!files && 'color' in files, after: (await s.listUploads()).map((m) => m.id), gone: await s.getFiles('u-00000002'), id: s.newId() };
+  });
+  expect(r.listed).toEqual([['u-00000002', [100, 100]], ['u-00000001', [50, 75]]]);
+  expect(r.hasFiles).toBe(true);
+  expect(r.after).toEqual(['u-00000001']);
+  expect(r.gone).toBeUndefined();
+  expect(r.id).toMatch(/^u-[0-9a-f]{8}$/);
+});
+
+test('uploads: a full quota gives the PRD message and leaves nothing behind', async ({ page }) => {
+  await page.addInitScript(() => {
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
+      if (this.name === 'files') throw new DOMException('full', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+  const r = await run(page, async () => {
+    const s = await import('/src/uploads/store.ts');
+    const blob = new Blob(['x']);
+    const message = await s.putUpload({ id: 'u-0000000a', kind: 'model', name: 'a', created: 1, bytes: 1, thumb: blob, files: { glb: blob } }).then(() => 'stored', (error: Error) => error.message);
+    return { message, listed: (await s.listUploads()).length };
+  });
+  expect(r).toEqual({ message: 'Your browser is out of space for uploads. Delete some in Uploads and try again.', listed: 0 });
+});
