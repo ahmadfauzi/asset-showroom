@@ -115,7 +115,8 @@ test.describe('set isolation', () => {
       for (const text of ['Kaydara', 'EXRLoader', 'GLTFExporter', 'invalid zip data']) expect(code.includes(text), `${text} in ${file}`).toBe(false);
     }
     const total = chunks.reduce((sum, { code }) => sum + code.length, 0);
-    expect(total, `start-up JavaScript: ${files.join(', ')} = ${total} bytes`).toBeLessThanOrEqual(ENTRY_BYTES_V2 + 10 * 1024);
+    // PRD 16.11: v3 may add up to 30 KB (raised from 10 KB on 19 Nov 2026).
+    expect(total, `start-up JavaScript: ${files.join(', ')} = ${total} bytes`).toBeLessThanOrEqual(ENTRY_BYTES_V2 + 30 * 1024);
   });
 
   test.afterAll(() => rmSync(outDir, { recursive: true, force: true }));
