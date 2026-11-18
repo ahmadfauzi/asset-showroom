@@ -1,11 +1,9 @@
 import '@fontsource-variable/inter/wght.css';
-import '@fontsource/jetbrains-mono/400.css';
 import './hud.css';
 import manifest, { type TextureInfo } from '@manifest';
-import slots from './textures/slots.json';
-import { accepts, PLACEHOLDER, SLOT_NAMES, type Slot } from './room';
+import { accepts, PLACEHOLDER, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 
-export const CATEGORIES = { wood: 'Wood', stone: 'Stone and tiles', fabric: 'Fabric and leather', wall: 'Wall finishes' };
+export const CATEGORIES = { wood: 'Wood', stone: 'Stone and tiles', fabric: 'Fabric and leather', wall: 'Wall finishes', ground: 'Ground' };
 type Category = TextureInfo['category'];
 
 // The texture to drag onto a surface travels in the drag data under this type.
@@ -20,21 +18,30 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
   return node;
 }
 
-// Slot panel, texture card and tray (PRD 6.3, 6.4 and 9). All text is set with textContent.
-export function createHud(onSelect: (slot: Slot | null) => void, onApply: (texture: TextureInfo) => void) {
-  const applied: Partial<Record<Slot, TextureInfo>> = {};
+// Room switcher, slot panel, texture card and tray (PRD 6.3, 6.4, 9 and 15.6). All text is set with textContent.
+export function createHud({
+  onSelect,
+  onApply,
+  onRoom,
+}: {
+  onSelect: (slot: Slot | null) => void;
+  onApply: (texture: TextureInfo) => void;
+  onRoom: (room: RoomKey) => void;
+}) {
+  let applied: Partial<Record<Slot, TextureInfo>> = {};
   let selected: Slot | null = null;
   let tab: Category = 'wood';
 
-  const slotButtons = {} as Record<Slot, HTMLButtonElement>;
-  for (const slot of Object.keys(slots) as Slot[]) {
-    const button = element('button', 'slot');
+  const roomButtons = (Object.keys(ROOMS) as RoomKey[]).map((key) => {
+    const button = element('button', '', ROOMS[key].name);
     button.type = 'button';
-    button.append(element('span', 'thumb'), element('span', '', SLOT_NAMES[slot]));
-    button.addEventListener('click', () => onSelect(selected === slot ? null : slot));
-    document.getElementById('slot-list')!.append(button);
-    slotButtons[slot] = button;
-  }
+    button.addEventListener('click', () => onRoom(key));
+    document.getElementById('rooms')!.append(button);
+    return { key, button };
+  });
+
+  // Filled in by setRoom with the room's own surfaces.
+  let slotButtons: Partial<Record<Slot, HTMLButtonElement>> = {};
 
   const tabButtons = {} as Record<Category, HTMLButtonElement>;
   for (const category of Object.keys(CATEGORIES) as Category[]) {
@@ -100,7 +107,7 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
       cardLink.href = shown.poliigonUrl;
     }
 
-    chipText.textContent = selected ? `for the ${SLOT_NAMES[selected].toLowerCase()}` : 'Select a surface to apply a texture';
+    chipText.textContent = selected ? `Textures for the ${SLOT_NAMES[selected].toLowerCase()}` : 'Select a surface to apply a texture';
     chipClear.hidden = !selected;
 
     for (const [category, button] of Object.entries(tabButtons) as [Category, HTMLButtonElement][]) {
@@ -131,12 +138,34 @@ export function createHud(onSelect: (slot: Slot | null) => void, onApply: (textu
     },
     setSelected(slot: Slot | null) {
       selected = slot;
-      // Jump to the first tab the slot accepts.
+      // Jump to the first tab the slot accepts, and scroll it into view where the tabs scroll (narrow screens).
       if (slot) tab = (Object.keys(CATEGORIES) as Category[]).find((category) => accepts(slot, category))!;
       render();
+      const tabs = tabButtons[tab].parentElement!;
+      const { offsetLeft, offsetWidth } = tabButtons[tab];
+      if (offsetLeft < tabs.scrollLeft || offsetLeft + offsetWidth > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = offsetLeft - 8;
     },
     setTexture(slot: Slot, texture: TextureInfo) {
       applied[slot] = texture;
+      render();
+    },
+    // Shows the room's surfaces and marks its button. `roomApplied` is the room's own record, kept by the caller.
+    setRoom(room: RoomKey, roomApplied: Partial<Record<Slot, TextureInfo>>) {
+      applied = roomApplied;
+      // The tray starts on the first category any of the room's surfaces accepts.
+      tab = (Object.keys(CATEGORIES) as Category[]).find((category) => (ROOMS[room].slots as Slot[]).some((slot) => accepts(slot, category)))!;
+      for (const { key, button } of roomButtons) button.setAttribute('aria-pressed', String(key === room));
+      slotButtons = {};
+      const list = document.getElementById('slot-list')!;
+      list.replaceChildren();
+      for (const slot of ROOMS[room].slots as Slot[]) {
+        const button = element('button', 'slot');
+        button.type = 'button';
+        button.append(element('span', 'thumb'), element('span', '', SLOT_NAMES[slot]));
+        button.addEventListener('click', () => onSelect(selected === slot ? null : slot));
+        list.append(button);
+        slotButtons[slot] = button;
+      }
       render();
     },
   };

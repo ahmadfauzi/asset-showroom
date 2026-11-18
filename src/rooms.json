@@ -1,0 +1,53 @@
+{
+  "living": {
+    "name": "Living room",
+    "slots": [
+      "floor",
+      "walls",
+      "featureWall",
+      "slatWall",
+      "upholstery",
+      "accents",
+      "rugs",
+      "woodwork"
+    ],
+    "models": ["potted_plant_04"]
+  },
+  "bedroom": {
+    "name": "Bedroom",
+    "slots": [
+      "floor",
+      "walls",
+      "featureWall",
+      "bedding",
+      "accents",
+      "rugs",
+      "woodwork"
+    ],
+    "models": []
+  },
+  "bathroom": {
+    "name": "Bathroom",
+    "slots": [
+      "floor",
+      "walls",
+      "showerWall",
+      "vanity",
+      "countertop",
+      "towels"
+    ],
+    "models": ["ornate_mirror_01"]
+  },
+  "garden": {
+    "name": "Garden",
+    "slots": [
+      "ground",
+      "path",
+      "deck",
+      "fence",
+      "rocks",
+      "cushions"
+    ],
+    "models": ["rock_07", "rock_09", "shrub_02", "shrub_03", "planter_box_01", "outdoor_table_chair_set_01"]
+  }
+}

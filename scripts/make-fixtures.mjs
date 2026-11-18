@@ -12,6 +12,8 @@ const COLOURS = {
   'velvet-fixture': '#3f5a73',
   'plaster-fixture': '#efe9df',
   'clay-fixture': '#c07a5a',
+  'grass-fixture': '#5f7f3a',
+  'snow-fixture': '#f2f4f7',
 };
 
 const size = { width: 256, height: 256, channels: 3 };

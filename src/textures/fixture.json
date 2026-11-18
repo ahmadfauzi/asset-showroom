@@ -1,15 +1,41 @@
 {
   "set": "fixture",
   "defaults": {
-    "floor": "oak-fixture",
-    "featureWall": "clay-fixture",
-    "walls": "plaster-fixture",
-    "slatWall": "walnut-fixture",
-    "upholstery": "linen-fixture",
-    "accents": "velvet-fixture",
-    "bedding": "linen-fixture",
-    "rugs": "velvet-fixture",
-    "woodwork": "walnut-fixture"
+    "living": {
+      "floor": "oak-fixture",
+      "featureWall": "clay-fixture",
+      "walls": "plaster-fixture",
+      "slatWall": "walnut-fixture",
+      "upholstery": "linen-fixture",
+      "accents": "velvet-fixture",
+      "rugs": "velvet-fixture",
+      "woodwork": "walnut-fixture"
+    },
+    "bedroom": {
+      "floor": "oak-fixture",
+      "featureWall": "clay-fixture",
+      "walls": "plaster-fixture",
+      "bedding": "linen-fixture",
+      "accents": "velvet-fixture",
+      "rugs": "velvet-fixture",
+      "woodwork": "walnut-fixture"
+    },
+    "bathroom": {
+      "floor": "marble-fixture",
+      "walls": "plaster-fixture",
+      "showerWall": "concrete-fixture",
+      "vanity": "walnut-fixture",
+      "countertop": "marble-fixture",
+      "towels": "linen-fixture"
+    },
+    "garden": {
+      "ground": "grass-fixture",
+      "path": "concrete-fixture",
+      "deck": "oak-fixture",
+      "fence": "walnut-fixture",
+      "rocks": "concrete-fixture",
+      "cushions": "linen-fixture"
+    }
   },
   "textures": [
     { "slug": "oak-fixture", "name": "Oak Fixture", "category": "wood", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
@@ -19,6 +45,8 @@
     { "slug": "linen-fixture", "name": "Linen Fixture", "category": "fabric", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [100, 100] },
     { "slug": "velvet-fixture", "name": "Velvet Fixture", "category": "fabric", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [100, 100] },
     { "slug": "plaster-fixture", "name": "Plaster Fixture", "category": "wall", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
-    { "slug": "clay-fixture", "name": "Clay Fixture", "category": "wall", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] }
+    { "slug": "clay-fixture", "name": "Clay Fixture", "category": "wall", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "grass-fixture", "name": "Grass Fixture", "category": "ground", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] },
+    { "slug": "snow-fixture", "name": "Snow Fixture", "category": "ground", "poliigonUrl": "https://www.poliigon.com/", "sizeCm": [200, 200] }
   ]
 }

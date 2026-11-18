@@ -7,5 +7,15 @@
   "accents": ["fabric"],
   "bedding": ["fabric"],
   "rugs": ["fabric"],
-  "woodwork": ["wood", "stone"]
+  "woodwork": ["wood", "stone"],
+  "showerWall": ["stone", "wall"],
+  "vanity": ["wood", "stone"],
+  "countertop": ["stone"],
+  "towels": ["fabric"],
+  "ground": ["ground"],
+  "path": ["stone"],
+  "deck": ["wood"],
+  "fence": ["wood", "stone"],
+  "rocks": ["stone"],
+  "cushions": ["fabric"]
 }

@@ -3,6 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 // The app tests run against the fixture texture set (src/textures/fixture.json).
 export default defineConfig({
   testDir: 'tests',
+  // Every test opens its own page, so tests run side by side. Two workers keep SwiftShader from starving.
+  fullyParallel: true,
+  workers: 2,
+  retries: 0,
   timeout: 180_000,
   expect: { timeout: 60_000 },
   use: {

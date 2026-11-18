@@ -6,60 +6,108 @@
     <meta name="robots" content="noindex" />
     <title>Asset Showroom</title>
     <style>
-      :root { --accent: #5fb3ff; }
-      html, body { margin: 0; height: 100%; background: #16161a; overflow: hidden; }
+      /* Colour and motion tokens. They live here so the loader and tooltip have them before hud.css loads.
+         main.ts reads --accent for the selection outline in the room. */
+      :root {
+        --page: #16161a;
+        --panel: rgb(30 29 27 / 0.92);
+        --panel-solid: #1e1d1b;
+        --line: rgb(255 250 240 / 0.09);
+        --line-strong: rgb(255 250 240 / 0.16);
+        --hover: rgb(255 250 240 / 0.07);
+        --on: rgb(255 250 240 / 0.14);
+        --ink: #f3f0ea;
+        --ink-2: #d2cdc4;
+        --ink-3: #aca69c;
+        --ink-off: #77736c;
+        --accent: #7db4ff;
+        --shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 8px 24px rgb(0 0 0 / 0.22);
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --fast: 160ms;
+        --base: 220ms;
+        --bar: 44px;
+        color-scheme: dark;
+      }
+      html, body { margin: 0; height: 100%; background: var(--page); overflow: hidden; }
       canvas { display: block; width: 100%; height: 100%; }
-      #no-webgl { display: none; color: #ddd; font: 16px system-ui, sans-serif; padding: 2rem; }
+      #no-webgl { display: none; color: var(--ink); font: 16px system-ui, sans-serif; padding: 2rem; }
       #loader {
         position: fixed; inset: 0; display: grid; place-items: center;
-        background: #16161a; color: #bbb; font: 14px system-ui, sans-serif;
-        transition: opacity 0.4s;
+        background: var(--page); color: var(--ink-3); font: 13px system-ui, sans-serif; letter-spacing: 0.01em;
+        font-variant-numeric: tabular-nums;
+        transition: opacity 0.4s var(--ease);
       }
       #loader.done { opacity: 0; pointer-events: none; }
       @media (prefers-reduced-motion: reduce) { #loader { transition: none; } }
       #tooltip {
         position: fixed; left: 0; top: 0; pointer-events: none; white-space: nowrap;
-        padding: 6px 10px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 0.08);
-        background: rgb(22 22 26 / 0.8); backdrop-filter: blur(8px);
-        color: #eee; font: 13px/1.4 system-ui, sans-serif;
+        padding: 7px 11px; border-radius: 10px; border: 1px solid var(--line);
+        background: var(--panel); box-shadow: var(--shadow);
+        color: var(--ink); font: 13px/1.4 system-ui, sans-serif;
       }
-      #tooltip .hint { color: #999; font-size: 12px; }
+      #tooltip .hint { color: var(--ink-3); font-size: 12px; }
     </style>
   </head>
   <body>
     <p id="no-webgl">This page needs WebGL2, and your browser doesn't support it. Try the latest Chrome, Edge, Safari or Firefox.</p>
     <canvas id="scene" aria-label="The room. Drag to turn it, scroll to zoom, click a surface to select it."></canvas>
-    <h1 id="title">Asset Showroom</h1>
-    <aside id="slots" class="panel" aria-label="Surfaces">
-      <div id="slot-list"></div>
-      <section id="card" hidden>
-        <img alt="" width="56" height="56" />
-        <div>
-          <div class="name"></div>
-          <div class="meta"><span class="category"></span> · <span class="size"></span></div>
-          <a target="_blank" rel="noopener noreferrer">View asset</a>
+    <div id="fade"></div>
+    <div id="side">
+      <header id="masthead" class="panel">
+        <h1 id="title">Asset Showroom</h1>
+        <nav id="rooms" aria-label="Rooms"></nav>
+      </header>
+      <aside id="slots" class="panel" aria-label="Surfaces">
+        <div id="slot-list"></div>
+        <section id="card" hidden>
+          <img alt="" width="56" height="56" />
+          <div>
+            <div class="name"></div>
+            <div class="meta"><span class="category"></span> · <span class="size"></span></div>
+            <a target="_blank" rel="noopener noreferrer">View asset</a>
+          </div>
+        </section>
+      </aside>
+    </div>
+    <div id="right">
+      <nav id="toolbar" class="panel" aria-label="Toolbar">
+        <button type="button" class="icon" data-action="undo" aria-label="Undo" title="Undo (Ctrl+Z)" aria-keyshortcuts="Control+Z Meta+Z" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5 4 8l3.5 3.5M4.5 8h7a4 4 0 0 1 0 8H9" /></svg>
+        </button>
+        <button type="button" class="icon" data-action="redo" aria-label="Redo" title="Redo (Shift+Ctrl+Z)" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 16 8l-3.5 3.5M15.5 8h-7a4 4 0 0 0 0 8H11" /></svg>
+        </button>
+        <span class="sep" aria-hidden="true"></span>
+        <button type="button" data-action="save" title="Save a picture of the room">Save picture</button>
+        <button type="button" data-action="copy" title="Copy a link to this room">Copy link</button>
+        <span class="sep" aria-hidden="true"></span>
+        <button type="button" data-action="help" title="Help (?)" aria-keyshortcuts="?">Help</button>
+      </nav>
+      <section id="daylight" class="panel" aria-label="Daylight">
+        <div class="time">
+          <div class="clock">12:00</div>
+          <input type="range" min="6" max="22" step="0.25" aria-label="Time of day" />
         </div>
+        <div class="presets"></div>
+        <button id="snow" type="button" aria-pressed="false" hidden>Snow</button>
       </section>
-    </aside>
-    <nav id="toolbar" class="panel" aria-label="Toolbar">
-      <button type="button" data-action="undo" aria-keyshortcuts="Control+Z Meta+Z" disabled>Undo</button>
-      <button type="button" data-action="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" disabled>Redo</button>
-      <button type="button" data-action="save">Save picture</button>
-      <button type="button" data-action="copy">Copy link</button>
-      <button type="button" data-action="help" aria-keyshortcuts="?">Help</button>
-    </nav>
+    </div>
     <div id="toast" class="panel" role="status" aria-live="polite"></div>
     <dialog id="help" aria-labelledby="help-title">
-      <h2 id="help-title">How the showroom works</h2>
+      <h2 id="help-title" tabindex="-1" autofocus>How the showroom works</h2>
       <p>Try textures on the surfaces of a room and see how they look in different light.</p>
+      <h3>Switch rooms</h3>
+      <p>There are four rooms: Living room, Bedroom, Bathroom and Garden. Use the room buttons to switch. Each room keeps its own textures, time of day and undo history while this page is open.</p>
       <h3>Apply a texture</h3>
       <p>Pick a surface in the list on the left, or click it in the room. Then click a texture in the tray at the bottom. You can also drag a texture straight onto a surface.</p>
       <h3>Change the light</h3>
-      <p>Use the presets or the slider on the right to change the time of day. The lamps come on after sunset.</p>
+      <p>Use the presets or the slider to change the time of day. The lamps come on after sunset. On a small screen, the slider is in the tray.</p>
+      <h3>Make it snow</h3>
+      <p>In the Garden, press Snow to turn snow on or off. Undo turns it back.</p>
       <h3>Move around</h3>
       <p>Drag to turn the room and scroll to zoom.</p>
       <h3>Share the room</h3>
-      <p>Copy link puts the room in the link. Anyone who opens it sees the same textures and time of day.</p>
+      <p>Copy link puts this room in the link, with its textures, time of day and snow. Anyone who opens it sees the same room.</p>
       <h3>Keys</h3>
       <table>
         <tr><td><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
@@ -72,15 +120,13 @@
       </table>
       <form method="dialog"><button>Close</button></form>
     </dialog>
-    <section id="daylight" class="panel" aria-label="Daylight">
-      <div class="time">
-        <div class="clock">12:00</div>
-        <input type="range" min="6" max="22" step="0.25" aria-label="Time of day" />
-      </div>
-      <div class="presets"></div>
-    </section>
     <section id="tray" class="panel" aria-label="Textures">
-      <div id="chip" class="panel"><span></span><button type="button" aria-label="Clear selection">×</button></div>
+      <div id="chip">
+        <span></span>
+        <button type="button" aria-label="Clear selection" title="Clear selection (Esc)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8m0-8-8 8" /></svg>
+        </button>
+      </div>
       <div id="tabs" role="group" aria-label="Texture categories"></div>
       <div id="swatches"></div>
     </section>
