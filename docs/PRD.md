@@ -721,7 +721,7 @@ Undo compares link strings (`src/history.ts`), so every undo step must be in the
 ### 16.11 Loading and performance
 
 - Upload code (`FBXLoader`, `EXRLoader`, `HDRLoader`, `GLTFExporter`, `EXRExporter`, `fflate`) loads only when you first upload, or when the link or library needs it. It adds nothing to first load. `fflate` comes with three.js, so there is no new dependency.
-- First load stays as measured in 15.12. Measure `dist/assets` before and after v3. The JavaScript loaded at start may grow by no more than 30 KB (raised from 10 KB on 19 Nov 2026, after milestone 2 used 10,188 bytes of it).
+- First load stays as measured in 15.12. Measure `dist/assets` before and after v3. The JavaScript loaded at start may grow by no more than 50 KB. It was raised from 10 KB on 19 Nov 2026 after milestone 2 used 10,188 bytes, and to 50 KB the same day after Task 8 reached 27,048 bytes. About 12.6 KB of that is code that links three.js between the start-up chunk and the upload chunk, not v3 features.
 - Uploads come from IndexedDB, not the network, so they don't count toward the 15 MB budget. The loader waits for the uploads the link uses, as it waits for the room's textures.
 - The 60 and 30 fps targets apply with 10 placed models. Checked: the orchid has 263,960 triangles. GTAO still turns off first under 30 fps.
 
