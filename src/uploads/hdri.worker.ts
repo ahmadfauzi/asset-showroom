@@ -23,6 +23,7 @@ function headerSize(name: string, bytes: Uint8Array): [number, number] {
   }
   // EXR: 8 bytes of magic number and version, then attributes: name, type, int32 size, value.
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 8 || view.getInt32(0, true) !== 20000630) return [0, 0]; // EXRLoader reports the bad file
   const text = (at: number) => {
     const end = bytes.indexOf(0, at);
     return [new TextDecoder().decode(bytes.subarray(at, end)), end + 1] as const;
@@ -32,12 +33,14 @@ function headerSize(name: string, bytes: Uint8Array): [number, number] {
     const [name, afterName] = text(at);
     if (!name) break;
     const [, afterType] = text(afterName);
-    const size = view.getInt32(afterType, true);
     const value = afterType + 4;
+    if (afterType <= afterName || value + 16 > bytes.length) break; // no end to the type, or cut short
+    const size = view.getInt32(afterType, true);
     if (name === 'dataWindow') {
       const [xMin, yMin, xMax, yMax] = [0, 4, 8, 12].map((o) => view.getInt32(value + o, true));
       return [xMax - xMin + 1, yMax - yMin + 1];
     }
+    if (value + size <= at) break; // a broken header would loop
     at = value + size;
   }
   return [0, 0];
