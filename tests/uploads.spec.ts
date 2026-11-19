@@ -360,3 +360,143 @@ test('an uploaded texture picked before a room switch stays on its room', async 
   await expect.poll(() => floorMap(page)).toMatch(/^u-[0-9a-f]{8}$/);
   expect(errors).toEqual([]);
 });
+
+// One model upload, used in turn by each test in this group (PRD 16.8 and 16.10).
+test.describe('placed models', () => {
+  test.describe.configure({ mode: 'serial' });
+  type Placement = { id: string; x: number; y: number; z: number; turn: number };
+  let page: Page;
+  let errors: string[];
+
+  const placed = () => page.evaluate((): Placement[] => (window as any).showroom.placed());
+  const models = async () => (await hash(page)).match(/&m=/g)?.length ?? 0; // "room=" ends in m= too
+  const modelSwatch = () => swatches(page).locator('.swatch');
+  const undoButton = () => page.locator('#toolbar [data-action="undo"]');
+  // Where a point in the room shows on the canvas.
+  const screenOf = (x: number, y: number, z: number) =>
+    page.evaluate(([x, y, z]) => {
+      const { camera } = (window as any).showroom;
+      // The camera's matrix is only brought up to date when a frame renders.
+      camera.updateMatrixWorld();
+      const point = camera.position.clone().set(x, y, z).project(camera);
+      return { x: ((point.x + 1) / 2) * innerWidth, y: ((1 - point.y) / 2) * innerHeight };
+    }, [x, y, z]);
+  const cameraPosition = () => page.evaluate(() => (window as any).showroom.camera.position.toArray() as number[]);
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+  test.afterAll(() => page.close());
+
+  test('a model swatch dragged onto the floor stands there', async () => {
+    waitsForUpload();
+    errors = await open(page);
+    await upload(page, 'model-glb.zip');
+    await uploadsTab(page).click();
+    await expect(swatches(page)).toHaveCount(1, done);
+    await expect(undoButton()).toBeDisabled();
+    // Open floor in front of the sofa, clear of the rug and the pouf. The canvas fills the window.
+    await modelSwatch().dragTo(page.locator('#scene'), { targetPosition: await screenOf(1, 0, 1.2) });
+    await expect.poll(models).toBe(1);
+    const [model] = await placed();
+    expect(model.y).toBeCloseTo(0, 2);
+    expect(model.x).toBeCloseTo(1, 1);
+    expect(model.z).toBeCloseTo(1.2, 1);
+    await expect(undoButton()).toBeEnabled();
+    expect(errors).toEqual([]);
+  });
+
+  test('clicking a model swatch places it in the middle of the view, or on the floor', async () => {
+    await modelSwatch().click();
+    await expect.poll(models).toBe(2);
+    // Look straight at the back wall, then click in the same task, before the orbit limits turn the camera back.
+    await page.evaluate(() => {
+      const { camera } = (window as any).showroom;
+      camera.position.set(0, 1.5, 0);
+      camera.lookAt(0, 1.5, -2.5);
+      camera.updateMatrixWorld();
+      document.querySelector<HTMLButtonElement>('.upload-swatch .swatch')!.click();
+    });
+    await expect.poll(models).toBe(3);
+    const [, , third] = await placed();
+    expect([third.x, third.y, third.z]).toEqual([0, 0, 0]);
+    await page.keyboard.press('r');
+    expect(errors).toEqual([]);
+  });
+
+  test('dragging a placed model moves it and orbit does not', async () => {
+    const before = await hash(page);
+    const [first] = await placed();
+    const camera = await cameraPosition();
+    const from = await screenOf(first.x, first.y + 0.25, first.z);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 100, from.y, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await placed())[0].x).not.toBe(first.x);
+    const after = await cameraPosition();
+    for (let i = 0; i < 3; i++) expect(after[i]).toBeCloseTo(camera[i], 3);
+    // The whole drag is one undo step.
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => hash(page)).toBe(before);
+    expect(errors).toEqual([]);
+  });
+
+  test('undo removes a placement and redo puts it back', async () => {
+    const before = await models();
+    await modelSwatch().click();
+    await expect.poll(models).toBe(before + 1);
+    await page.keyboard.press('Control+z');
+    await expect.poll(models).toBe(before);
+    expect(await placed()).toHaveLength(before);
+    await page.keyboard.press('Control+Shift+z');
+    await expect.poll(models).toBe(before + 1);
+    expect(await placed()).toHaveLength(before + 1);
+    expect(errors).toEqual([]);
+  });
+
+  test('a link with m= restores the model after a reload', async () => {
+    const before = await hash(page);
+    const positions = await placed();
+    await page.reload();
+    await expect(page.locator('#loader')).toHaveClass(/done/);
+    expect(await hash(page)).toBe(before);
+    expect(await placed()).toEqual(positions);
+    expect(errors).toEqual([]);
+  });
+
+  test('dragging a model over the sky keeps it in place', async () => {
+    await page.locator('#rooms button', { hasText: 'Garden' }).click();
+    await expect.poll(() => hash(page)).toContain('room=garden');
+    await uploadsTab(page).click();
+    await modelSwatch().click();
+    await expect.poll(models).toBe(1);
+    const before = await hash(page);
+    const [model] = await placed();
+    const camera = await cameraPosition();
+    const from = await screenOf(model.x, model.y + 0.25, model.z);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x, 2);
+    await page.mouse.up();
+    expect(await placed()).toEqual([model]);
+    // The press was on the model, so the camera didn't orbit.
+    const after = await cameraPosition();
+    for (let i = 0; i < 3; i++) expect(after[i]).toBeCloseTo(camera[i], 3);
+    expect(await hash(page)).toBe(before);
+    expect(before).not.toContain('NaN');
+    expect(errors).toEqual([]);
+  });
+
+  test('the 11th model is refused', async () => {
+    for (let n = (await models()) + 1; n <= 10; n++) {
+      await modelSwatch().click();
+      await expect.poll(models).toBe(n);
+    }
+    await modelSwatch().click();
+    await expect(page.locator('#toast')).toHaveText('This room has 10 models. Remove one first.');
+    expect(await models()).toBe(10);
+    expect(await placed()).toHaveLength(10);
+    expect(errors).toEqual([]);
+  });
+});

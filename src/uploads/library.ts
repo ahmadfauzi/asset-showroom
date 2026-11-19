@@ -1,4 +1,5 @@
-import { RepeatWrapping, SRGBColorSpace, Texture } from 'three';
+import { RepeatWrapping, SRGBColorSpace, Texture, type Group, type Mesh } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { deleteUpload, getFiles, listUploads, putUpload, setSize as saveSize } from './store';
 import type { TextureFiles, Upload, UploadedTexture, UploadMeta } from './types';
 
@@ -9,6 +10,7 @@ export type Library = {
   thumb(id: string): string;
   texture(id: string): UploadedTexture | undefined;
   loadTexture(id: string): Promise<Texture[]>;
+  loadModel(id: string): Promise<Group>;
   setSize(id: string, sizeCm: [number, number]): Promise<void>;
   add(upload: Upload): Promise<void>;
   remove(id: string): Promise<void>;
@@ -29,6 +31,7 @@ export async function createLibrary(): Promise<Library> {
   // One object per upload, so a new size shows wherever it is used.
   const textures = new Map<string, UploadedTexture>();
   const maps = new Map<string, Texture[]>();
+  const models = new Map<string, Promise<Group>>();
   const get = (id: string) => list.find((meta) => meta.id === id);
   const thumb = (id: string) => {
     if (!thumbs.has(id)) thumbs.set(id, URL.createObjectURL(get(id)!.thumb));
@@ -63,6 +66,23 @@ export async function createLibrary(): Promise<Library> {
       repeat(loaded, texture(id)!.sizeCm);
       maps.set(id, loaded);
       return loaded;
+    },
+    // The stored glb, read once. Each placement gets its own copy, which shares the geometry and materials.
+    async loadModel(id) {
+      if (!models.has(id)) {
+        const loading = (async () => {
+          const { glb } = (await getFiles(id)) as { glb: Blob };
+          const { scene } = await new GLTFLoader().parseAsync(await glb.arrayBuffer(), '');
+          scene.traverse((object) => {
+            if ((object as Mesh).isMesh) object.castShadow = object.receiveShadow = true;
+          });
+          return scene;
+        })();
+        // Forget a failed read so the next placement tries again.
+        loading.catch(() => models.delete(id));
+        models.set(id, loading);
+      }
+      return (await models.get(id)!).clone();
     },
     // Changes the upload everywhere it shows, in every room (PRD 16.7).
     async setSize(id, sizeCm) {

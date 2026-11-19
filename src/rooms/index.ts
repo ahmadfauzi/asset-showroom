@@ -18,6 +18,7 @@ export type BuiltRoom = {
   outdoor: boolean;
   extent: number; // half-size of the sun's shadow area, metres
   view: { home: Vector3; target: Vector3; minDistance: number; maxDistance: number; minAzimuth: number; maxAzimuth: number };
+  floorCentre: Vector3; // the middle of the floor (the Garden's lawn), at floor height
   models: Promise<string[]>; // settles when the decor models are placed, with the ids of any that failed to load
 };
 

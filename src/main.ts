@@ -28,14 +28,15 @@ import manifest from '@manifest';
 import { createDaylight, DEFAULT_TIME } from './daylight';
 import { commit as record, createHistory, redo as stepForward, undo as stepBack, type History } from './history';
 import { createHud, DRAG_TYPE } from './hud';
+import { createPlacements, fallback, surfaceAt, type Placed } from './placement';
 import { accepts, fits, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 import { buildRoom, type BuiltRoom } from './rooms/index';
 import { createSnow } from './snow';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
 import { createLibrary } from './uploads/library';
-import { createUploadsTab } from './uploads/tab';
-import type { AnyTexture } from './uploads/types';
+import { createUploadsTab, MODEL_DRAG_TYPE } from './uploads/tab';
+import { LIMITS, MESSAGES, type AnyTexture } from './uploads/types';
 import { createUploader } from './uploads/uploader';
 
 // One per room, made the first time the room is needed. It keeps the room's textures, time, snow and undo
@@ -49,6 +50,7 @@ type RoomSession = {
   snow: boolean;
   flakes?: ReturnType<typeof createSnow>; // the Garden only
   loads: Promise<unknown>[]; // the default textures and models, which the loader waits for
+  placed: Placed[]; // uploaded models, in placing order (PRD 16.8)
 };
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -143,11 +145,15 @@ if (!gl) {
 
   const raycaster = new Raycaster();
   const pointer = new Vector2();
-  const hitAt = (event: MouseEvent) => {
-    pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+  // A ray through a point on the canvas, from -1 to 1 across and up.
+  const aim = (x: number, y: number) => {
+    pointer.set(x, y);
+    camera.updateMatrixWorld(); // a slow frame may not have done it yet since the camera last moved
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObject(active.built.group)[0];
+    return raycaster;
   };
+  const rayAt = (event: MouseEvent) => aim((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+  const hitAt = (event: MouseEvent) => rayAt(event).intersectObject(active.built.group)[0];
   const slotAt = (event: MouseEvent): Slot | null => hitAt(event)?.object.userData.slot ?? null;
 
   const tooltip = document.getElementById('tooltip')!;
@@ -164,20 +170,52 @@ if (!gl) {
   });
   canvas.addEventListener('pointerleave', () => (tooltip.hidden = true));
 
+  // Placed models (PRD 16.8). A new model shows on the surface the ray meets, or in the middle of the floor.
+  const placements = createPlacements({
+    camera,
+    canvas,
+    controls,
+    library,
+    active: () => active,
+    onCommit: () => commit(),
+    onSelect(index) {
+      select(null);
+      outline.selectedObjects = [active.placed[index].object];
+    },
+  });
+  const placeModel = (id: string, ray: Raycaster) => {
+    if (library.get(id)?.kind !== 'model') return;
+    if (active.placed.length >= LIMITS.modelsPerRoom) return toolbar.toast(MESSAGES.cap);
+    placements.place(active, id, surfaceAt(ray, active.built.group) ?? fallback(active.built));
+  };
+
   // A click is a press and release less than 5 px apart, so orbit drags don't change the selection.
+  // Pressing on a placed model drags it instead. This runs before orbit's own listener, so orbit never starts.
   let pressedAt: [number, number] | null = null;
-  canvas.addEventListener('pointerdown', (event) => (pressedAt = [event.clientX, event.clientY]));
+  canvas.addEventListener(
+    'pointerdown',
+    (event) => {
+      const index = placements.hit(event);
+      pressedAt = index === null ? [event.clientX, event.clientY] : null;
+      if (index !== null) placements.startDrag(active, index, event);
+    },
+    { capture: true },
+  );
   canvas.addEventListener('pointerup', (event) => {
     if (pressedAt && Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) < 5) select(slotAt(event));
     pressedAt = null;
   });
 
   // Dropping a swatch on a surface applies it there. A surface that doesn't accept the category ignores it.
+  // A model swatch dropped on the room places that model.
   canvas.addEventListener('dragover', (event) => {
-    if (event.dataTransfer?.types.includes(DRAG_TYPE)) event.preventDefault();
+    const types = event.dataTransfer?.types ?? [];
+    if (types.includes(DRAG_TYPE) || types.includes(MODEL_DRAG_TYPE)) event.preventDefault();
   });
   canvas.addEventListener('drop', (event) => {
     event.preventDefault();
+    const model = event.dataTransfer?.getData(MODEL_DRAG_TYPE);
+    if (model) return placeModel(model, rayAt(event));
     const texture = findTexture(event.dataTransfer?.getData(DRAG_TYPE) ?? '');
     const hit = hitAt(event);
     const slot: Slot | undefined = hit?.object.userData.slot;
@@ -193,7 +231,7 @@ if (!gl) {
     textures: { ...session.latest },
     time: session === active ? daylight.target() : session.time,
     snow: session.snow,
-    models: [], // Task 6 and later fill these in
+    models: session.placed.map((p) => p.placement),
     sky: null,
   });
   const save = () => {
@@ -211,6 +249,7 @@ if (!gl) {
       const texture = findTexture(slug);
       if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
     }
+    void placements.sync(active, state.models);
     daylight.setTime(state.time);
     active.snow = state.snow;
     showSnow();
@@ -271,6 +310,7 @@ if (!gl) {
   const uploadsTab = createUploadsTab({
     thumb: library.thumb,
     onUse(meta) {
+      if (meta.kind === 'model') return placeModel(meta.id, aim(0, 0));
       const texture = library.texture(meta.id);
       if (texture) use(texture);
     },
@@ -316,7 +356,9 @@ if (!gl) {
   composer.addPass(gtao);
   // The Playwright tests read the camera and the room's materials, and switch GTAO off for steady screenshots.
   if (manifest.set === 'fixture') {
-    Object.assign(window, { showroom: { camera, gtao, renderer, scene, materials: () => active.built.materials } });
+    Object.assign(window, {
+      showroom: { camera, gtao, renderer, scene, materials: () => active.built.materials, placed: () => active.placed.map((p) => p.placement) },
+    });
   }
   composer.addPass(new UnrealBloomPass(new Vector2(), 0.2, 0.4, 0.9));
   composer.addPass(outline);
@@ -534,7 +576,10 @@ if (!gl) {
       time,
       snow,
       loads: [built.models.then((failed) => failed.length && session === active && toolbar.toast("Couldn't load some decor. The room still works."))],
+      placed: [],
     };
+    // The link's models, if they are uploaded models in this browser (PRD 16.10).
+    if (fromLink) session.loads.push(placements.sync(session, link.models.filter((m) => library.get(m.id)?.kind === 'model')));
     const picks = { ...(manifest.defaults[key] ?? {}), ...(fromLink ? link.textures : {}) };
     for (const [slot, slug] of Object.entries(picks) as [Slot, string][]) {
       const texture = findTexture(slug);

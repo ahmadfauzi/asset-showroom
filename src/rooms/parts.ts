@@ -304,6 +304,8 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
     outdoor,
     extent,
     view,
+    // Every room's floor, and the Garden's lawn, is centred on x = z = 0 with its top at y = 0.
+    floorCentre: new Vector3(),
     models: Promise.all(loading).then(() => failed),
   });
 
