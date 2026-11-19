@@ -28,7 +28,7 @@ import manifest from '@manifest';
 import { createDaylight, DEFAULT_TIME } from './daylight';
 import { commit as record, createHistory, redo as stepForward, undo as stepBack, type History } from './history';
 import { createHud, DRAG_TYPE } from './hud';
-import { createPlacements, fallback, surfaceAt, type Placed } from './placement';
+import { createPlacements, fallback, inside, surfaceAt, type Placed } from './placement';
 import { accepts, fits, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 import { buildRoom, type BuiltRoom } from './rooms/index';
 import { createSnow } from './snow';
@@ -125,11 +125,27 @@ if (!gl) {
   outline.edgeStrength = 4;
   outline.edgeThickness = 1;
 
+  // A surface or a placed model can be selected, not both. Selecting a surface, or none, clears the model.
   let selected: Slot | null = null;
   const select = (slot: Slot | null) => {
     selected = slot;
-    outline.selectedObjects = slot ? active.built.group.children.filter((mesh) => mesh.userData.slot === slot) : [];
     hud.setSelected(slot);
+    placements.select(null);
+  };
+  // Each model is named after its upload, counted from 1 in this room: "PlantOrchid001 2" (PRD 16.8).
+  const modelNames = () => {
+    const counts = new Map<string, number>();
+    return active.placed.map(({ placement: { id } }) => {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+      return `${library.get(id)?.name ?? id} ${counts.get(id)}`;
+    });
+  };
+  const showSelection = () => {
+    const model = placements.selected();
+    outline.selectedObjects = selected
+      ? active.built.group.children.filter((mesh) => mesh.userData.slot === selected)
+      : model === null ? [] : [active.placed[model].object];
+    hud.setModels(modelNames(), model);
   };
   const use = (texture: AnyTexture) => {
     if (!selected || !fits(selected, texture)) return;
@@ -141,6 +157,7 @@ if (!gl) {
     onApply: use,
     onSize: (id, sizeCm) => void library.setSize(id, sizeCm),
     onRoom: (key) => void showRoom(key),
+    onModel: (index) => placements.select(index),
   });
 
   const raycaster = new Raycaster();
@@ -158,12 +175,18 @@ if (!gl) {
 
   const tooltip = document.getElementById('tooltip')!;
   const tooltipTitle = tooltip.firstElementChild!;
+  const tooltipHint = tooltip.lastElementChild as HTMLElement;
   canvas.addEventListener('pointermove', (event) => {
-    const slot = event.buttons ? null : slotAt(event);
-    canvas.style.cursor = slot ? 'pointer' : '';
-    tooltip.hidden = !slot;
-    if (!slot) return;
-    tooltipTitle.textContent = `${SLOT_NAMES[slot]} · ${active.current[slot]?.name ?? 'No texture'}`;
+    const object = event.buttons ? null : (hitAt(event)?.object ?? null);
+    const model = active.placed.find((p) => inside(object, p.object));
+    const slot: Slot | null = object?.userData.slot ?? null;
+    canvas.style.cursor = model ? 'grab' : slot ? 'pointer' : '';
+    tooltip.hidden = !model && !slot;
+    if (tooltip.hidden) return;
+    tooltipTitle.textContent = model
+      ? `${library.get(model.placement.id)?.name ?? model.placement.id} · drag to move`
+      : `${SLOT_NAMES[slot!]} · ${active.current[slot!]?.name ?? 'No texture'}`;
+    tooltipHint.hidden = !!model;
     const x = Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8);
     const y = Math.min(event.clientY + 14, window.innerHeight - tooltip.offsetHeight - 8);
     tooltip.style.transform = `translate(${x}px, ${y}px)`;
@@ -179,8 +202,11 @@ if (!gl) {
     active: () => active,
     onCommit: () => commit(),
     onSelect(index) {
-      select(null);
-      outline.selectedObjects = [active.placed[index].object];
+      if (index !== null && selected) {
+        selected = null;
+        hud.setSelected(null);
+      }
+      showSelection();
     },
   });
   const placeModel = (id: string, ray: Raycaster) => {
@@ -250,6 +276,9 @@ if (!gl) {
       if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
     }
     void placements.sync(active, state.models);
+    // The selected model stays selected while it is still in the list.
+    const model = placements.selected();
+    placements.select(model !== null && active.placed[model] ? model : null);
     daylight.setTime(state.time);
     active.snow = state.snow;
     showSnow();
@@ -325,6 +354,39 @@ if (!gl) {
   uploadsTab.setUploads(library.list());
   const uploader = createUploader({ library, tab: uploadsTab, toolbar, renderer, onAdded: () => {} });
 
+  // The selected model's bar sits above the model on screen, inside the window (PRD 16.8).
+  const bar = document.getElementById('model-bar')!;
+  for (const button of bar.querySelectorAll<HTMLButtonElement>('[data-turn]')) {
+    button.addEventListener('click', () => placements.turn(Number(button.dataset.turn) as 15 | -15));
+  }
+  bar.querySelector('[data-action="remove"]')!.addEventListener('click', () => placements.remove());
+  const bounds = new Box3();
+  const corner = new Vector3();
+  const placeBar = () => {
+    const model = placements.selected();
+    bar.hidden = model === null;
+    if (model === null) return;
+    // A model that is still loading has no size, so its own position stands in.
+    const { object } = active.placed[model];
+    bounds.setFromObject(object).expandByPoint(object.getWorldPosition(corner));
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? bounds.max.x : bounds.min.x, i & 2 ? bounds.max.y : bounds.min.y, i & 4 ? bounds.max.z : bounds.min.z).project(camera);
+      const x = ((corner.x + 1) / 2) * innerWidth;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, ((1 - corner.y) / 2) * innerHeight);
+    }
+    const x = MathUtils.clamp((left + right) / 2 - bar.offsetWidth / 2, 8, innerWidth - bar.offsetWidth - 8);
+    const y = MathUtils.clamp(top - bar.offsetHeight - 8, 8, innerHeight - bar.offsetHeight - 8);
+    bar.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
+
+  // Keys for the selected model (PRD 16.8): [right, towards the camera] in steps of 0.1 m.
+  const ARROWS: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+
   // Keys (PRD 6.10). Esc also closes the help dialog, which the browser does itself.
   window.addEventListener('keydown', (event) => {
     // Keys typed in a field, such as an uploaded texture's size, stay in the field. The time slider isn't one.
@@ -336,6 +398,16 @@ if (!gl) {
       return event.shiftKey ? redo() : undo();
     }
     if (event.ctrlKey || event.metaKey) return;
+    if (placements.selected() !== null) {
+      const key = event.key.toLowerCase();
+      // The time slider uses the arrows itself.
+      if (ARROWS[event.key] && !(event.target as Element).closest?.('input')) {
+        event.preventDefault();
+        placements.move(...ARROWS[event.key]);
+      }
+      if (key === 'q' || key === 'e') placements.turn(key === 'e' ? 15 : -15);
+      if (event.key === 'Delete' || event.key === 'Backspace') placements.remove();
+    }
     if (event.key === 'r' || event.key === 'R') resetView();
     if (event.key === '[' || event.key === ']') {
       daylight.setTime(daylight.target() + (event.key === ']' ? 1 : -1));
@@ -407,6 +479,7 @@ if (!gl) {
     controls.update();
     daylight.update();
     active.flakes?.update(performance.now() / 1000);
+    placeBar();
     composer.render();
   });
 
@@ -611,8 +684,9 @@ if (!gl) {
     resetView();
     daylight.setRoom(session.built);
     daylight.setTime(session.time);
-    select(null);
+    // After setRoom, which empties the slot panel, so the room's models are listed again.
     hud.setRoom(key, session.current);
+    select(null);
     uploadsTab.setRoom(key);
     showSnow();
     save();

@@ -361,6 +361,17 @@ test('an uploaded texture picked before a room switch stays on its room', async 
   expect(errors).toEqual([]);
 });
 
+// Where a point in the room shows on the canvas.
+const pointOnScreen = (page: Page, x: number, y: number, z: number) =>
+  page.evaluate(([x, y, z]) => {
+    const { camera } = (window as any).showroom;
+    // The camera's matrix is only brought up to date when a frame renders.
+    camera.updateMatrixWorld();
+    const point = camera.position.clone().set(x, y, z).project(camera);
+    return { x: ((point.x + 1) / 2) * innerWidth, y: ((1 - point.y) / 2) * innerHeight };
+  }, [x, y, z]);
+const modelBar = (page: Page) => page.locator('#model-bar');
+
 // One model upload, used in turn by each test in this group (PRD 16.8 and 16.10).
 test.describe('placed models', () => {
   test.describe.configure({ mode: 'serial' });
@@ -372,15 +383,7 @@ test.describe('placed models', () => {
   const models = async () => (await hash(page)).match(/&m=/g)?.length ?? 0; // "room=" ends in m= too
   const modelSwatch = () => swatches(page).locator('.swatch');
   const undoButton = () => page.locator('#toolbar [data-action="undo"]');
-  // Where a point in the room shows on the canvas.
-  const screenOf = (x: number, y: number, z: number) =>
-    page.evaluate(([x, y, z]) => {
-      const { camera } = (window as any).showroom;
-      // The camera's matrix is only brought up to date when a frame renders.
-      camera.updateMatrixWorld();
-      const point = camera.position.clone().set(x, y, z).project(camera);
-      return { x: ((point.x + 1) / 2) * innerWidth, y: ((1 - point.y) / 2) * innerHeight };
-    }, [x, y, z]);
+  const screenOf = (x: number, y: number, z: number) => pointOnScreen(page, x, y, z);
   const cameraPosition = () => page.evaluate(() => (window as any).showroom.camera.position.toArray() as number[]);
 
   test.beforeAll(async ({ browser }) => {
@@ -465,6 +468,28 @@ test.describe('placed models', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a second pointer cannot drag another model while one drags', async () => {
+    const before = await hash(page);
+    const [first, second] = await placed();
+    const from = await screenOf(first.x, first.y + 0.25, first.z);
+    const other = await screenOf(second.x, second.y + 0.25, second.z);
+    // Open floor in front of the first model.
+    const to = await screenOf(first.x, 0, first.z + 0.4);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    // A second finger presses the second model and drags it while the first pointer still holds the first model.
+    await page.evaluate(([other, to]) => {
+      const finger = { pointerId: 99, pointerType: 'touch', bubbles: true };
+      document.getElementById('scene')!.dispatchEvent(new PointerEvent('pointerdown', { ...finger, clientX: other.x, clientY: other.y }));
+      window.dispatchEvent(new PointerEvent('pointermove', { ...finger, clientX: to.x, clientY: to.y }));
+      window.dispatchEvent(new PointerEvent('pointerup', { ...finger, clientX: to.x, clientY: to.y }));
+    }, [other, to]);
+    await page.mouse.up();
+    expect((await placed())[1]).toEqual(second);
+    expect(await hash(page)).toBe(before);
+    expect(errors).toEqual([]);
+  });
+
   test('undo removes a placement and redo puts it back', async () => {
     const before = await models();
     await modelSwatch().click();
@@ -493,6 +518,102 @@ test.describe('placed models', () => {
     expect(await meshes()).toBe(before);
     expect(await hash(page)).toBe(link);
     expect(await placed()).toEqual(positions);
+    expect(errors).toEqual([]);
+  });
+
+  // The m= values in the link, and the turn in each.
+  const modelParams = async () => (await hash(page)).match(/&m=[^&]*/g) ?? [];
+  const turns = async () => (await modelParams()).map((m) => Number(m.split(',')[4]));
+  const modelButtons = () => page.locator('#slot-list .slot.model');
+
+  test('keys move, turn and remove a selected model, one undo step each', async () => {
+    // The Bedroom has no models yet.
+    await page.locator('#rooms button', { hasText: 'Bedroom' }).click();
+    await expect.poll(() => hash(page)).toContain('room=bedroom');
+    await uploadsTab(page).click();
+    await modelSwatch().click();
+    await expect.poll(models).toBe(1);
+    const hashes = [await hash(page)];
+    const press = async (key: string) => {
+      await page.keyboard.press(key);
+      await expect.poll(() => hash(page)).not.toBe(hashes.at(-1));
+      hashes.push(await hash(page));
+    };
+    const [start] = await placed();
+    await press('ArrowUp');
+    const [moved] = await placed();
+    expect(Math.hypot(moved.x - start.x, moved.z - start.z)).toBeCloseTo(0.1, 1);
+    expect(await turns()).toEqual([0]);
+    await press('e');
+    expect(await turns()).toEqual([15]);
+    await press('E');
+    expect(await turns()).toEqual([30]);
+    await press('q');
+    expect(await turns()).toEqual([15]);
+    await press('Delete');
+    expect(await models()).toBe(0);
+    // Five undo steps, one per key, then redo goes forward again.
+    for (let i = hashes.length - 2; i >= 0; i--) {
+      await page.keyboard.press('Control+z');
+      await expect.poll(() => hash(page)).toBe(hashes[i]);
+    }
+    for (let i = 1; i < hashes.length; i++) {
+      await page.keyboard.press('Control+Shift+z');
+      await expect.poll(() => hash(page)).toBe(hashes[i]);
+    }
+    expect(errors).toEqual([]);
+  });
+
+  test('the model bar turns and removes', async () => {
+    await modelSwatch().click();
+    await expect.poll(models).toBe(1);
+    await expect(modelBar(page)).toBeVisible();
+    await modelBar(page).getByRole('button', { name: 'Turn right' }).click();
+    await expect.poll(turns).toEqual([15]);
+    await modelBar(page).getByRole('button', { name: 'Remove' }).click();
+    await expect.poll(models).toBe(0);
+    await expect(modelBar(page)).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
+  test('placed models are listed in the slot panel and can be picked with the keyboard', async () => {
+    await modelSwatch().click();
+    await expect.poll(models).toBe(1);
+    await modelSwatch().click();
+    await expect.poll(models).toBe(2);
+    await expect(modelButtons()).toHaveText(['model-glb 1', 'model-glb 2']);
+    await modelButtons().first().click();
+    await expect(modelButtons().first()).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Tab');
+    await expect(modelButtons().nth(1)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(modelButtons().nth(1)).toHaveAttribute('aria-pressed', 'true');
+    await expect(modelButtons().first()).toHaveAttribute('aria-pressed', 'false');
+    await expect(modelBar(page)).toBeVisible();
+    await page.keyboard.press('e');
+    await expect.poll(turns).toEqual([0, 15]);
+    expect(errors).toEqual([]);
+  });
+
+  test("arrow keys on the time slider don't move a selected model", async () => {
+    await modelSwatch().click();
+    await expect.poll(models).toBe(3);
+    const before = await modelParams();
+    const time = (await hash(page)).match(/t=[^&]*/)?.[0];
+    const slider = page.getByRole('slider', { name: 'Time of day' });
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await expect.poll(async () => (await hash(page)).match(/t=[^&]*/)?.[0]).not.toBe(time);
+    expect(await modelParams()).toEqual(before);
+    expect(errors).toEqual([]);
+  });
+
+  test('Esc deselects the model', async () => {
+    await modelButtons().first().click();
+    await expect(modelBar(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(modelBar(page)).toBeHidden();
+    await expect(page.locator('#slot-list .slot.model[aria-pressed="true"]')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 
@@ -528,6 +649,38 @@ test.describe('placed models', () => {
     await expect(page.locator('#toast')).toHaveText('This room has 10 models. Remove one first.');
     expect(await models()).toBe(10);
     expect(await placed()).toHaveLength(10);
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('on a narrow touch screen', () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
+
+  test('on a narrow screen a tapped model shows the bar', async ({ page }) => {
+    waitsForUpload();
+    const errors = await open(page);
+    await upload(page, 'model-glb.zip');
+    await uploadsTab(page).click();
+    await expect(swatches(page)).toHaveCount(1, done);
+    await swatches(page).locator('.swatch').click();
+    await expect.poll(() => page.evaluate(() => (window as any).showroom.placed().length)).toBe(1);
+    // Placing selects the model, so clear that first.
+    await page.keyboard.press('Escape');
+    await expect(modelBar(page)).toBeHidden();
+    const [model] = await page.evaluate(() => (window as any).showroom.placed());
+    const at = await pointOnScreen(page, model.x, model.y + 0.1, model.z);
+    // The model may still be loading, so tap until it is there.
+    await expect(async () => {
+      await page.touchscreen.tap(at.x, at.y);
+      await expect(modelBar(page)).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 60_000 });
+    const bar = (await modelBar(page).boundingBox())!;
+    const tray = (await page.locator('#tray').boundingBox())!;
+    expect(bar.x).toBeGreaterThanOrEqual(0);
+    expect(bar.y).toBeGreaterThanOrEqual(0);
+    expect(bar.x + bar.width).toBeLessThanOrEqual(375);
+    expect(bar.y + bar.height).toBeLessThanOrEqual(812);
+    expect(bar.y + bar.height <= tray.y || tray.y + tray.height <= bar.y).toBe(true);
     expect(errors).toEqual([]);
   });
 });

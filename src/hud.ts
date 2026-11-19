@@ -28,11 +28,13 @@ export function createHud({
   onApply,
   onSize,
   onRoom,
+  onModel,
 }: {
   onSelect: (slot: Slot | null) => void;
   onApply: (texture: AnyTexture) => void;
   onSize: (id: string, sizeCm: [number, number]) => void;
   onRoom: (room: RoomKey) => void;
+  onModel: (index: number) => void;
 }) {
   let applied: Partial<Record<Slot, AnyTexture>> = {};
   let selected: Slot | null = null;
@@ -46,8 +48,9 @@ export function createHud({
     return { key, button };
   });
 
-  // Filled in by setRoom with the room's own surfaces.
+  // Filled in by setRoom with the room's own surfaces, then by setModels with its placed models.
   let slotButtons: Partial<Record<Slot, HTMLButtonElement>> = {};
+  let modelButtons: HTMLButtonElement[] = [];
 
   const tabButtons = {} as Record<Tab, HTMLButtonElement>;
   for (const category of Object.keys(TABS) as Tab[]) {
@@ -186,6 +189,7 @@ export function createHud({
       tab = (Object.keys(CATEGORIES) as Category[]).find((category) => (ROOMS[room].slots as Slot[]).some((slot) => accepts(slot, category)))!;
       for (const { key, button } of roomButtons) button.setAttribute('aria-pressed', String(key === room));
       slotButtons = {};
+      modelButtons = [];
       const list = document.getElementById('slot-list')!;
       list.replaceChildren();
       for (const slot of ROOMS[room].slots as Slot[]) {
@@ -197,6 +201,22 @@ export function createHud({
         slotButtons[slot] = button;
       }
       render();
+    },
+    // The room's placed models, under its surfaces. The buttons are kept and only renamed, so focus stays put.
+    setModels(names: string[], chosen: number | null) {
+      for (const button of modelButtons.splice(names.length)) button.remove();
+      names.forEach((name, i) => {
+        if (!modelButtons[i]) {
+          const button = element('button', 'slot model');
+          button.type = 'button';
+          button.append(element('span', 'thumb'), element('span'));
+          button.addEventListener('click', () => onModel(i));
+          document.getElementById('slot-list')!.append(button);
+          modelButtons[i] = button;
+        }
+        modelButtons[i].lastChild!.textContent = name;
+        modelButtons[i].setAttribute('aria-pressed', String(i === chosen));
+      });
     },
   };
 }

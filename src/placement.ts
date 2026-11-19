@@ -9,7 +9,7 @@ import type { Placement } from './uploads/types';
 export type Placed = { placement: Placement; object: Group };
 type Session = { built: BuiltRoom; placed: Placed[] };
 
-const inside = (object: Object3D | null, parent: Object3D) => {
+export const inside = (object: Object3D | null, parent: Object3D) => {
   for (; object; object = object.parent) if (object === parent) return true;
   return false;
 };
@@ -31,6 +31,8 @@ export const fallback = (room: BuiltRoom) => room.floorCentre.clone();
 // Stored to 0.01 m, so the link and the scene agree. + 0 turns -0 into 0.
 const round = (n: number) => Math.round(n * 100) / 100 + 0;
 
+const UP = new Vector3(0, 1, 0);
+
 export function createPlacements({
   camera,
   canvas,
@@ -46,7 +48,7 @@ export function createPlacements({
   library: Library;
   active: () => Session; // the room that shows
   onCommit: () => void;
-  onSelect: (index: number) => void;
+  onSelect: (index: number | null) => void;
 }) {
   const raycaster = new Raycaster();
   const pointer = new Vector2();
@@ -61,6 +63,21 @@ export function createPlacements({
     object.position.set(x, y, z);
     object.rotation.y = MathUtils.degToRad(turn);
   };
+
+  // The selected model in the room that shows, by its index in the room's list.
+  let chosen: number | null = null;
+  const select = (index: number | null) => {
+    chosen = index;
+    onSelect(index);
+  };
+  // The selected model, after a change to it.
+  const change = (entry: Placed, placement: Placement) => {
+    entry.placement = placement;
+    put(entry.object, placement);
+    onCommit();
+  };
+  // Only one model drag at a time, so a second finger can't start another or turn orbit back on early.
+  let held = false;
 
   // Makes the room's placed models match the list. A model stays when its index and id still match, so undo,
   // redo and a link all use this. The list is in place at once; the promise settles when the new models are in.
@@ -85,10 +102,37 @@ export function createPlacements({
 
   return {
     sync,
+    select,
+    selected: () => chosen,
     // Places a model at a point, selects it and makes one undo step.
     place(session: Session, id: string, at: Vector3) {
       void sync(session, [...session.placed.map((p) => p.placement), { id, x: round(at.x), y: round(at.y), z: round(at.z), turn: 0 }]);
-      onSelect(session.placed.length - 1);
+      select(session.placed.length - 1);
+      onCommit();
+    },
+    // Turns the selected model by 15° either way, kept from 0 to 345.
+    turn(by: 15 | -15) {
+      const entry = chosen === null ? null : active().placed[chosen];
+      if (entry) change(entry, { ...entry.placement, turn: (entry.placement.turn + by + 360) % 360 });
+    },
+    // Moves the selected model in steps of 0.1 m: dx to the camera's right, dz towards the camera, both flat on the
+    // ground. It stands on the upward surface below, and stays put if there is none.
+    move(dx: number, dz: number) {
+      const { built, placed } = active();
+      const entry = chosen === null ? null : placed[chosen];
+      if (!entry) return;
+      const forward = camera.getWorldDirection(new Vector3()).setY(0).normalize();
+      const right = new Vector3().crossVectors(forward, UP);
+      const { x, y, z } = entry.placement;
+      const at = dropBelow(new Vector3(x, y, z).addScaledVector(right, dx * 0.1).addScaledVector(forward, -dz * 0.1), built.group, entry.object);
+      if (at) change(entry, { ...entry.placement, x: round(at.x), y: round(at.y), z: round(at.z) });
+    },
+    // Removes the selected model.
+    remove() {
+      const session = active();
+      if (chosen === null) return;
+      void sync(session, session.placed.filter((_, i) => i !== chosen).map((p) => p.placement));
+      select(null);
       onCommit();
     },
     // The placed model under the pointer, if nothing is in front of it.
@@ -102,6 +146,8 @@ export function createPlacements({
     // less than 5 px is a click and selects it. A drag that moved it is one undo step. Only the pointer that
     // pressed counts, so a second finger doesn't move the model or end the drag.
     startDrag(session: Session, index: number, event: PointerEvent) {
+      if (held) return;
+      held = true;
       const entry = session.placed[index];
       const start = entry.placement;
       let dragging = false;
@@ -120,7 +166,8 @@ export function createPlacements({
         removeEventListener('pointerup', up);
         removeEventListener('pointercancel', up);
         controls.enabled = true;
-        if (!dragging) onSelect(index);
+        held = false;
+        if (!dragging) select(index);
         else if (entry.placement !== start) onCommit();
       };
       addEventListener('pointermove', move);

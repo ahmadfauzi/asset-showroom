@@ -69,7 +69,7 @@ button svg {
 }
 
 /* One look for every HUD button: quiet at rest, a soft fill on hover, a lifted chip when on. */
-:is(#rooms, #toolbar, #daylight .presets, #tabs) button,
+:is(#rooms, #toolbar, #daylight .presets, #tabs, #model-bar) button,
 .slot,
 #snow,
 #help form button {
@@ -84,7 +84,7 @@ button svg {
     box-shadow var(--fast) var(--ease);
 }
 
-:is(:is(#rooms, #toolbar, #daylight .presets, #tabs) button, .slot, #snow, #help form button):hover:not(:disabled) {
+:is(:is(#rooms, #toolbar, #daylight .presets, #tabs, #model-bar) button, .slot, #snow, #help form button):hover:not(:disabled) {
   background: var(--hover);
   color: var(--ink);
 }
@@ -169,6 +169,23 @@ button svg {
   box-shadow:
     0 0 0 2px var(--panel-solid),
     0 0 0 3.5px var(--accent);
+}
+
+/* A placed model has a round mark where a surface shows its texture. */
+.slot.model .thumb {
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+/* The selected model's bar. main.ts moves it above the model every frame. */
+#model-bar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
 }
 
 #card {
@@ -837,7 +854,7 @@ button svg {
     visibility 0s;
 }
 
-body.hud-hidden :is(#side, #right, #tray, #tooltip) {
+body.hud-hidden :is(#side, #right, #tray, #tooltip, #model-bar) {
   opacity: 0;
   visibility: hidden;
   transition:
