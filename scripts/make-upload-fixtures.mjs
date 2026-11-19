@@ -50,29 +50,41 @@ const cube = (size) => {
   return { positions, normals, uvs, quads };
 };
 
-// A glb written by hand: one mesh with positions, normals and indices.
-const glb = (size) => {
+// A glb written by hand: one mesh with positions, normals and indices. `interleaved` writes it without indices and
+// with position and normal sharing one bufferView (byteStride 24), which GLTFLoader reads as interleaved attributes.
+const glb = (size, interleaved = false) => {
   const { positions, normals, quads } = cube(size);
   const indices = quads.flatMap((q) => [q, q + 1, q + 2, q, q + 2, q + 3]);
-  const bin = Buffer.concat([Buffer.from(new Float32Array(positions).buffer), Buffer.from(new Float32Array(normals).buffer), Buffer.from(new Uint16Array(indices).buffer)]);
-  const n = positions.length / 3;
+  const n = interleaved ? indices.length : positions.length / 3;
+  const vertex = (i) => [...positions.slice(i * 3, i * 3 + 3), ...normals.slice(i * 3, i * 3 + 3)];
+  const bin = interleaved
+    ? Buffer.from(new Float32Array(indices.flatMap(vertex)).buffer)
+    : Buffer.concat([Buffer.from(new Float32Array(positions).buffer), Buffer.from(new Float32Array(normals).buffer), Buffer.from(new Uint16Array(indices).buffer)]);
+  const bounds = { min: [-size / 2, 0, -size / 2], max: [size / 2, size, size / 2] };
   const json = {
     asset: { version: '2.0' },
     scene: 0,
     scenes: [{ nodes: [0] }],
     nodes: [{ mesh: 0, name: 'Box' }],
-    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+    meshes: [{ primitives: [interleaved ? { attributes: { POSITION: 0, NORMAL: 1 } } : { attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
     buffers: [{ byteLength: bin.length }],
-    bufferViews: [
-      { buffer: 0, byteOffset: 0, byteLength: n * 12, target: 34962 },
-      { buffer: 0, byteOffset: n * 12, byteLength: n * 12, target: 34962 },
-      { buffer: 0, byteOffset: n * 24, byteLength: indices.length * 2, target: 34963 },
-    ],
-    accessors: [
-      { bufferView: 0, componentType: 5126, count: n, type: 'VEC3', min: [-size / 2, 0, -size / 2], max: [size / 2, size, size / 2] },
-      { bufferView: 1, componentType: 5126, count: n, type: 'VEC3' },
-      { bufferView: 2, componentType: 5123, count: indices.length, type: 'SCALAR' },
-    ],
+    bufferViews: interleaved
+      ? [{ buffer: 0, byteOffset: 0, byteLength: n * 24, byteStride: 24, target: 34962 }]
+      : [
+          { buffer: 0, byteOffset: 0, byteLength: n * 12, target: 34962 },
+          { buffer: 0, byteOffset: n * 12, byteLength: n * 12, target: 34962 },
+          { buffer: 0, byteOffset: n * 24, byteLength: indices.length * 2, target: 34963 },
+        ],
+    accessors: interleaved
+      ? [
+          { bufferView: 0, byteOffset: 0, componentType: 5126, count: n, type: 'VEC3', ...bounds },
+          { bufferView: 0, byteOffset: 12, componentType: 5126, count: n, type: 'VEC3' },
+        ]
+      : [
+          { bufferView: 0, componentType: 5126, count: n, type: 'VEC3', ...bounds },
+          { bufferView: 1, componentType: 5126, count: n, type: 'VEC3' },
+          { bufferView: 2, componentType: 5123, count: indices.length, type: 'SCALAR' },
+        ],
   };
   const pad = (buffer, fill) => Buffer.concat([buffer, Buffer.alloc((4 - (buffer.length % 4)) % 4, fill)]);
   const jsonChunk = pad(Buffer.from(JSON.stringify(json)), 0x20);
@@ -142,3 +154,4 @@ Connections:  {
 zip('model-glb.zip', { 'Box.glb': glb(0.5) });
 zip('model-fbx.zip', { 'Box.fbx': fbx(30), 'Box_COL.png': await png('#2864c8') });
 zip('model-huge.zip', { 'Huge.glb': glb(10) });
+zip('model-interleaved.zip', { 'Strided.glb': glb(0.5, true) });

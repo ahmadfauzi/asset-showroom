@@ -188,7 +188,7 @@ const openApp = async (page: Page) => {
 
 test('uploads: models get metres, a colour map and a sane size', async ({ page }) => {
   await openApp(page);
-  const zips = Object.fromEntries(['model-fbx.zip', 'model-glb.zip', 'model-huge.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
+  const zips = Object.fromEntries(['model-fbx.zip', 'model-glb.zip', 'model-huge.zip', 'model-interleaved.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
   const r = await page.evaluate(async (zips) => {
     const p = await import('/src/uploads/process.ts');
     const m = await import('/src/uploads/model.ts');
@@ -216,13 +216,16 @@ test('uploads: models get metres, a colour map and a sane size', async ({ page }
     return results;
   }, zips);
   const fbx = r['model-fbx.zip'], glb = r['model-glb.zip'], huge = r['model-huge.zip'];
+  // No indices, and position and normal share one bufferView, so GLTFLoader gives interleaved attributes.
+  const strided = r['model-interleaved.zip'];
   expect(Math.abs(fbx.height - 0.3)).toBeLessThanOrEqual(0.01);
   expect(fbx.map).toBe(true);
   expect(Math.abs(glb.height - 0.5)).toBeLessThanOrEqual(0.01);
+  expect(Math.abs(strided.height - 0.5)).toBeLessThanOrEqual(0.01);
   expect(Math.abs(huge.height - 1)).toBeLessThanOrEqual(0.01);
   expect(huge.notices).toEqual(["This model's size looked wrong, so it's now 1 m tall."]);
-  expect([fbx.notices, glb.notices]).toEqual([[], []]);
-  for (const model of [fbx, glb, huge]) {
+  expect([fbx.notices, glb.notices, strided.notices]).toEqual([[], [], []]);
+  for (const model of [fbx, glb, huge, strided]) {
     expect(model.kind).toBe('model');
     expect(Math.abs(model.base)).toBeLessThan(0.001);
     expect(model.thumb).toEqual([256, 256]);

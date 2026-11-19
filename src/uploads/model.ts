@@ -13,6 +13,7 @@ import {
   SRGBColorSpace,
   Vector3,
   WebGLRenderTarget,
+  type InterleavedBufferAttribute,
   type Light,
   type Material,
   type Mesh,
@@ -233,10 +234,12 @@ export async function processModel(
   const center = box.getCenter(new Vector3());
   holder.position.set(-center.x, -box.min.y, -center.z);
 
-  // FBXLoader gives meshes without indices. Sharing vertices makes the stored file much smaller.
+  // FBXLoader gives meshes without indices. Sharing vertices makes the stored file much smaller. Meshes that have
+  // indices are left alone, and so are interleaved attributes (from a glTF byteStride), which mergeVertices can't read.
   holder.traverse((o) => {
     const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
+    if (!mesh.isMesh || mesh.geometry.index) return;
+    if (Object.values(mesh.geometry.attributes).some((a) => (a as InterleavedBufferAttribute).isInterleavedBufferAttribute)) return;
     const merged = mergeVertices(mesh.geometry);
     if (merged !== mesh.geometry) mesh.geometry.dispose();
     mesh.geometry = merged;
