@@ -354,18 +354,25 @@ if (!gl) {
   uploadsTab.setUploads(library.list());
   const uploader = createUploader({ library, tab: uploadsTab, toolbar, renderer, onAdded: () => {} });
 
-  // The selected model's bar sits above the model on screen, inside the window (PRD 16.8).
+  // The selected model's bar sits above the model on screen, inside the window (PRD 16.8). On narrow screens the
+  // tray runs across the bottom, so the bar stays above it.
   const bar = document.getElementById('model-bar')!;
+  const tray = document.getElementById('tray')!;
   for (const button of bar.querySelectorAll<HTMLButtonElement>('[data-turn]')) {
     button.addEventListener('click', () => placements.turn(Number(button.dataset.turn) as 15 | -15));
   }
   bar.querySelector('[data-action="remove"]')!.addEventListener('click', () => placements.remove());
   const bounds = new Box3();
   const corner = new Vector3();
+  let barSize = [0, 0]; // read when the bar shows, not every frame
   const placeBar = () => {
     const model = placements.selected();
-    bar.hidden = model === null;
-    if (model === null) return;
+    if (model === null) return void (bar.hidden = true);
+    if (bar.hidden) {
+      bar.hidden = false;
+      barSize = [bar.offsetWidth, bar.offsetHeight];
+    }
+    const [width, height] = barSize;
     // A model that is still loading has no size, so its own position stands in.
     const { object } = active.placed[model];
     bounds.setFromObject(object).expandByPoint(object.getWorldPosition(corner));
@@ -379,8 +386,9 @@ if (!gl) {
       right = Math.max(right, x);
       top = Math.min(top, ((1 - corner.y) / 2) * innerHeight);
     }
-    const x = MathUtils.clamp((left + right) / 2 - bar.offsetWidth / 2, 8, innerWidth - bar.offsetWidth - 8);
-    const y = MathUtils.clamp(top - bar.offsetHeight - 8, 8, innerHeight - bar.offsetHeight - 8);
+    const bottom = narrow.matches ? tray.getBoundingClientRect().top : innerHeight;
+    const x = MathUtils.clamp((left + right) / 2 - width / 2, 8, innerWidth - width - 8);
+    const y = MathUtils.clamp(top - height - 8, 8, bottom - height - 8);
     bar.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   };
 
@@ -398,10 +406,10 @@ if (!gl) {
       return event.shiftKey ? redo() : undo();
     }
     if (event.ctrlKey || event.metaKey) return;
-    if (placements.selected() !== null) {
+    // Not while focus is in the time slider, which uses the arrows itself.
+    if (placements.selected() !== null && !(event.target as Element).closest?.('input')) {
       const key = event.key.toLowerCase();
-      // The time slider uses the arrows itself.
-      if (ARROWS[event.key] && !(event.target as Element).closest?.('input')) {
+      if (ARROWS[event.key]) {
         event.preventDefault();
         placements.move(...ARROWS[event.key]);
       }

@@ -595,7 +595,7 @@ test.describe('placed models', () => {
     expect(errors).toEqual([]);
   });
 
-  test("arrow keys on the time slider don't move a selected model", async () => {
+  test("keys on the time slider don't move, turn or remove a selected model", async () => {
     await modelSwatch().click();
     await expect.poll(models).toBe(3);
     const before = await modelParams();
@@ -604,6 +604,11 @@ test.describe('placed models', () => {
     await slider.focus();
     await slider.press('ArrowRight');
     await expect.poll(async () => (await hash(page)).match(/t=[^&]*/)?.[0]).not.toBe(time);
+    expect(await modelParams()).toEqual(before);
+    // The model keys don't act while focus is in the slider either.
+    await slider.press('e');
+    await slider.press('Backspace');
+    await expect(slider).toBeFocused();
     expect(await modelParams()).toEqual(before);
     expect(errors).toEqual([]);
   });
@@ -681,6 +686,41 @@ test.describe('on a narrow touch screen', () => {
     expect(bar.x + bar.width).toBeLessThanOrEqual(375);
     expect(bar.y + bar.height).toBeLessThanOrEqual(812);
     expect(bar.y + bar.height <= tray.y || tray.y + tray.height <= bar.y).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test('on a narrow screen the bar stays above the tray when the model is low on screen', async ({ page }) => {
+    waitsForUpload();
+    const errors = await open(page);
+    await upload(page, 'model-glb.zip');
+    await uploadsTab(page).click();
+    await expect(swatches(page)).toHaveCount(1, done);
+    await swatches(page).locator('.swatch').click();
+    await expect(modelBar(page)).toBeVisible();
+    const tray = (await page.locator('#tray').boundingBox())!;
+    const placed = () => page.evaluate((): { id: string; x: number; y: number; z: number }[] => (window as any).showroom.placed());
+    // Zoom all the way in, then drop the model on the floor near the bottom of the screen, behind the tray.
+    await page.mouse.move(187, 300);
+    for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -500);
+    await page.waitForTimeout(3000); // the zoom eases in
+    const [{ id }] = await placed();
+    for (const y of [790, 760, 730, 700]) {
+      await page.evaluate(([id, y]) => {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.setData('text/x-asset-showroom-model', id);
+        document.getElementById('scene')!.dispatchEvent(new DragEvent('drop', { clientX: 187, clientY: y, dataTransfer, bubbles: true, cancelable: true }));
+      }, [id, y] as const);
+      const model = (await placed()).at(-1)!;
+      if ((await pointOnScreen(page, model.x, model.y, model.z)).y > tray.y + 80) break;
+    }
+    const model = (await placed()).at(-1)!;
+    expect((await pointOnScreen(page, model.x, model.y, model.z)).y).toBeGreaterThan(tray.y + 80);
+    // The bar is moved each frame, so wait for it to settle.
+    await page.waitForTimeout(500);
+    await expect(modelBar(page)).toBeVisible();
+    const bar = (await modelBar(page).boundingBox())!;
+    expect(bar.y).toBeGreaterThanOrEqual(0);
+    expect(bar.y + bar.height).toBeLessThanOrEqual(tray.y);
     expect(errors).toEqual([]);
   });
 });
