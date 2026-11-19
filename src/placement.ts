@@ -99,20 +99,23 @@ export function createPlacements({
       return index < 0 ? null : index;
     },
     // Moves a model with the pointer over upward surfaces. Orbit is off until the release. A press that moves
-    // less than 5 px is a click and selects it. A drag that moved it is one undo step.
+    // less than 5 px is a click and selects it. A drag that moved it is one undo step. Only the pointer that
+    // pressed counts, so a second finger doesn't move the model or end the drag.
     startDrag(session: Session, index: number, event: PointerEvent) {
       const entry = session.placed[index];
       const start = entry.placement;
       let dragging = false;
       controls.enabled = false;
       const move = (moved: PointerEvent) => {
+        if (moved.pointerId !== event.pointerId) return;
         dragging ||= Math.hypot(moved.clientX - event.clientX, moved.clientY - event.clientY) >= 5;
         const at = dragging && surfaceAt(aim(moved), session.built.group, entry.object);
         if (!at) return;
         entry.placement = { ...entry.placement, x: round(at.x), y: round(at.y), z: round(at.z) };
         put(entry.object, entry.placement);
       };
-      const up = () => {
+      const up = (released: PointerEvent) => {
+        if (released.pointerId !== event.pointerId) return;
         removeEventListener('pointermove', move);
         removeEventListener('pointerup', up);
         removeEventListener('pointercancel', up);

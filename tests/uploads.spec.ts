@@ -442,6 +442,29 @@ test.describe('placed models', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a second pointer does not move a dragged model or end the drag', async () => {
+    const before = await hash(page);
+    const [first] = await placed();
+    const from = await screenOf(first.x, first.y + 0.25, first.z);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    // A second finger moves and lifts while the first still holds the model.
+    await page.evaluate(({ x, y }) => {
+      const other = { pointerId: 99, pointerType: 'touch', clientX: x + 100, clientY: y, bubbles: true };
+      window.dispatchEvent(new PointerEvent('pointermove', other));
+      window.dispatchEvent(new PointerEvent('pointerup', other));
+    }, from);
+    expect((await placed())[0]).toEqual(first);
+    expect(await hash(page)).toBe(before);
+    // The first pointer still drags, and the drag is one undo step.
+    await page.mouse.move(from.x + 100, from.y, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await placed())[0].x).not.toBe(first.x);
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => hash(page)).toBe(before);
+    expect(errors).toEqual([]);
+  });
+
   test('undo removes a placement and redo puts it back', async () => {
     const before = await models();
     await modelSwatch().click();
