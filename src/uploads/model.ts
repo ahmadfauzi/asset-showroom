@@ -26,6 +26,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as WebGLTextureUtils from 'three/examples/jsm/utils/WebGLTextureUtils.js';
 import { mapRole, words, type MapRole } from './detect';
 import { decode, encodeImage, fit } from './texture';
@@ -48,11 +49,12 @@ export function countTriangles(object: Object3D) {
 }
 
 // Reads the model file. The files it points to (a .gltf's .bin and images, an FBX's textures) are found in the zip
-// by file name. Anything else gets an empty data URL, so nothing outside the zip is fetched.
+// by file name. The KTX2 transcoder comes from the app's /basis/ folder. Anything else gets an empty data URL, so
+// nothing outside the zip is fetched.
 export async function parseModel(files: Record<string, Uint8Array>, main: string, renderer: WebGLRenderer): Promise<Object3D> {
   const urls = new Map(Object.entries(files).map(([name, bytes]) => [baseName(name), URL.createObjectURL(new Blob([bytes as BlobPart]))]));
   const manager = new LoadingManager();
-  manager.setURLModifier((url) => (/^(data|blob):/.test(url) ? url : (urls.get(baseName(decodeURIComponent(url))) ?? 'data:,')));
+  manager.setURLModifier((url) => (/^(data|blob):|^\/basis\//.test(url) ? url : (urls.get(baseName(decodeURIComponent(url))) ?? 'data:,')));
   let started = false;
   manager.onStart = () => (started = true);
   const loaded = new Promise<void>((resolve) => (manager.onLoad = resolve));
@@ -114,6 +116,8 @@ async function zipMaps(files: Record<string, Uint8Array>, flipY: boolean) {
       texture.flipY = flipY;
       texture.wrapS = texture.wrapT = RepeatWrapping;
       if (role === 'color') texture.colorSpace = SRGBColorSpace;
+      // A JPEG colour map is written as JPEG. A PNG or WebP one may have alpha, so it stays PNG, like the other maps.
+      if (role === 'color' && /\.jpe?g$/i.test(name)) texture.userData.mimeType = 'image/jpeg';
       set[role] = texture;
     }
     groups.set(prefix, set);
@@ -228,6 +232,15 @@ export async function processModel(
   box.setFromObject(holder);
   const center = box.getCenter(new Vector3());
   holder.position.set(-center.x, -box.min.y, -center.z);
+
+  // FBXLoader gives meshes without indices. Sharing vertices makes the stored file much smaller.
+  holder.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const merged = mergeVertices(mesh.geometry);
+    if (merged !== mesh.geometry) mesh.geometry.dispose();
+    mesh.geometry = merged;
+  });
 
   const exporter = new GLTFExporter().setTextureUtils(WebGLTextureUtils);
   const glb = new Blob([(await exporter.parseAsync(holder, { binary: true, maxTextureSize: MAP_MAX })) as ArrayBuffer], { type: 'model/gltf-binary' });

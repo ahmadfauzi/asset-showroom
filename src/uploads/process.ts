@@ -28,9 +28,9 @@ export async function processZip(
     if (kind === 'hdri') throw new UploadError(MESSAGES.nothing);
     onProgress(0.1);
 
-    // Only what is needed is unpacked: the maps, and for a model its mesh file, any .bin and every image.
-    // Folders and previews are skipped, as in detectKind.
-    const wanted = (name: string) => (kind === 'model' ? /\.(bin|jpe?g|png|webp)$/i.test(name) : mapRole(name));
+    // Only what is needed is unpacked: the maps, and for a model its mesh file, any .bin and every image
+    // (KTX2 too). Folders and previews are skipped, as in detectKind.
+    const wanted = (name: string) => (kind === 'model' ? /\.(bin|jpe?g|png|webp|ktx2)$/i.test(name) : mapRole(name));
     const names = entries
       .map((entry) => entry.name)
       .filter((name) => name === main || (!name.endsWith('/') && !name.toLowerCase().includes('preview') && wanted(name)));
