@@ -456,11 +456,19 @@ test.describe('placed models', () => {
   });
 
   test('a link with m= restores the model after a reload', async () => {
-    const before = await hash(page);
+    const link = await hash(page);
     const positions = await placed();
+    // The loader waits for the link's models, so the room has the same meshes once it hides (PRD 16.11).
+    const meshes = () => page.evaluate(() => {
+      let count = 0;
+      (window as any).showroom.scene.traverse((object: any) => object.isMesh && count++);
+      return count;
+    });
+    const before = await meshes();
     await page.reload();
     await expect(page.locator('#loader')).toHaveClass(/done/);
-    expect(await hash(page)).toBe(before);
+    expect(await meshes()).toBe(before);
+    expect(await hash(page)).toBe(link);
     expect(await placed()).toEqual(positions);
     expect(errors).toEqual([]);
   });
