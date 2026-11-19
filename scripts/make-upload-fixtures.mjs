@@ -2,6 +2,8 @@
 // Usage: node scripts/make-upload-fixtures.mjs
 import { mkdirSync, writeFileSync } from 'node:fs';
 import sharp from 'sharp';
+import { DataTexture, FloatType, HalfFloatType, RGBAFormat } from 'three';
+import { EXRExporter } from 'three/examples/jsm/exporters/EXRExporter.js';
 import { zipSync } from 'three/examples/jsm/libs/fflate.module.js';
 
 const OUT = 'tests/fixtures/uploads';
@@ -155,3 +157,20 @@ zip('model-glb.zip', { 'Box.glb': glb(0.5) });
 zip('model-fbx.zip', { 'Box.fbx': fbx(30), 'Box_COL.png': await png('#2864c8') });
 zip('model-huge.zip', { 'Huge.glb': glb(10) });
 zip('model-interleaved.zip', { 'Strided.glb': glb(0.5, true) });
+
+// HDRIs: 512 x 256, black except a white 32 x 32 square centred at pixel (128, 64) from the top-left.
+// The sun test expects elevation +45 degrees and angle -90 degrees.
+const [W, H] = [512, 256];
+const white = (x, top) => Math.abs(x + 0.5 - 128) < 16 && Math.abs(top + 0.5 - 64) < 16;
+// EXR data starts at the bottom row, as EXRLoader gives it and EXRExporter expects it.
+const pixels = new Float32Array(W * H * 4);
+for (let row = 0; row < H; row++)
+  for (let x = 0; x < W; x++) pixels.set(white(x, H - 1 - row) ? [1, 1, 1, 1] : [0, 0, 0, 1], (row * W + x) * 4);
+const texture = new DataTexture(pixels, W, H, RGBAFormat, FloatType);
+zip('hdri-exr.zip', { 'Sky_HDR.exr': await new EXRExporter().parse(texture, { type: HalfFloatType }) });
+// Flat RGBE, top row first. A black first pixel tells HDRLoader the data is not run-length encoded.
+const rgbe = new Uint8Array(W * H * 4);
+for (let top = 0; top < H; top++) for (let x = 0; x < W; x++) if (white(x, top)) rgbe.set([255, 255, 255, 128], (top * W + x) * 4);
+const hdrHeader = (w, h) => bytes(`#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y ${h} +X ${w}\n`);
+zip('hdri-hdr.zip', { 'Sky.hdr': new Uint8Array([...hdrHeader(W, H), ...rgbe]) });
+zip('hdri-16k.zip', { 'Big.hdr': new Uint8Array([...hdrHeader(16384, 8192), 0, 0, 0, 0, 0, 0, 0, 0]) });

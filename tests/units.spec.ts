@@ -263,3 +263,38 @@ test('uploads: the triangle limit', async ({ page }) => {
   });
   expect(r).toEqual({ triangles: 500001, message: 'This model has more than 500,000 triangles.' });
 });
+
+test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page }) => {
+  await openApp(page);
+  const zips = Object.fromEntries(['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-16k.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
+  const r = await page.evaluate(async (zips) => {
+    const p = await import('/src/uploads/process.ts');
+    // EXRLoader at the URL Vite gives the Worker's import, to read the stored file back.
+    const worker = await (await fetch('/src/uploads/hdri.worker.ts')).text();
+    const { EXRLoader } = await import(worker.match(/from ["']([^"']*EXRLoader[^"']*)["']/)![1]);
+    const { renderer } = (window as any).showroom;
+    const results: Record<string, { kind?: string; sun?: unknown; size?: number[]; thumb?: number[]; error?: string }> = {};
+    for (const [name, bytes] of Object.entries(zips)) {
+      try {
+        const upload = await p.processZip(new File([new Uint8Array(bytes)], name), renderer, () => {}, () => {});
+        const exr = new EXRLoader().parse(await (upload.files as { exr: Blob }).exr.arrayBuffer());
+        const thumb = await createImageBitmap(upload.thumb);
+        results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height] };
+      } catch (error) {
+        results[name] = { error: (error as Error).message };
+      }
+    }
+    return results;
+  }, zips);
+  for (const name of ['hdri-exr.zip', 'hdri-hdr.zip']) {
+    const { kind, sun, size, thumb, error } = r[name];
+    expect(error, name).toBeUndefined();
+    expect(kind).toBe('hdri');
+    const { direction, color } = sun as { direction: number[]; color: number[] };
+    [0, 0.707, -0.707].forEach((value, i) => expect(Math.abs(direction[i] - value), `${name} direction ${direction}`).toBeLessThanOrEqual(0.05));
+    color.forEach((value) => expect(value).toBeCloseTo(1, 3));
+    expect(size).toEqual([512, 256]);
+    expect(thumb).toEqual([256, 128]);
+  }
+  expect(r['hdri-16k.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
+});

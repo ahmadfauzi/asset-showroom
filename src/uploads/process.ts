@@ -1,9 +1,10 @@
 import type { WebGLRenderer } from 'three';
 import { checkSizes, detectKind, LIMITS, mapRole, MESSAGES } from './detect';
+import { processHdri } from './hdri';
 import { processModel } from './model';
 import { newId } from './store';
 import { processTexture } from './texture';
-import { UploadError, type Upload, type UploadFiles } from './types';
+import { UploadError, type SkySun, type Upload, type UploadFiles } from './types';
 import { listZip, readZip } from './zip';
 
 // Decoders and canvases report running out of memory in these ways.
@@ -25,19 +26,20 @@ export async function processZip(
     const entries = listZip(data);
     checkSizes(file.size, entries);
     const { kind, main } = detectKind(entries);
-    if (kind === 'hdri') throw new UploadError(MESSAGES.nothing);
     onProgress(0.1);
 
-    // Only what is needed is unpacked: the maps, and for a model its mesh file, any .bin and every image
-    // (KTX2 too). Folders and previews are skipped, as in detectKind.
-    const wanted = (name: string) => (kind === 'model' ? /\.(bin|jpe?g|png|webp|ktx2)$/i.test(name) : mapRole(name));
+    // Only what is needed is unpacked: the maps, for a model its mesh file, any .bin and every image (KTX2 too),
+    // and for an HDRI the one file. Folders and previews are skipped, as in detectKind.
+    const wanted = (name: string) => kind !== 'hdri' && (kind === 'model' ? /\.(bin|jpe?g|png|webp|ktx2)$/i.test(name) : mapRole(name));
     const names = entries
       .map((entry) => entry.name)
       .filter((name) => name === main || (!name.endsWith('/') && !name.toLowerCase().includes('preview') && wanted(name)));
     const unpacked = await readZip(data, names);
     onProgress(0.3);
-    let files: UploadFiles, thumb: Blob;
-    if (kind === 'model') {
+    let files: UploadFiles, thumb: Blob, sun: SkySun = null;
+    if (kind === 'hdri') {
+      ({ files, thumb, sun } = await processHdri(main, unpacked[main]));
+    } else if (kind === 'model') {
       const model = await processModel(unpacked, main, renderer);
       if (model.resized) notice("This model's size looked wrong, so it's now 1 m tall.");
       ({ files, thumb } = model);
@@ -54,6 +56,7 @@ export async function processZip(
       bytes: thumb.size + Object.values(files).reduce((sum, blob: Blob) => sum + blob.size, 0),
       thumb,
       ...(kind === 'texture' && { sizeCm: [100, 100] as [number, number] }),
+      ...(kind === 'hdri' && { sun }),
       files,
     };
   } catch (error) {
