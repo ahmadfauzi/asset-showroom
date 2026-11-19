@@ -5,10 +5,10 @@ const COLOR_MAX = 2048;
 const NORMAL_MAX = 1024;
 const THUMB = 256;
 
-const decode = (bytes: Uint8Array) => createImageBitmap(new Blob([bytes as BlobPart]), { colorSpaceConversion: 'none' });
+export const decode = (bytes: Uint8Array) => createImageBitmap(new Blob([bytes as BlobPart]), { colorSpaceConversion: 'none' });
 
 // Never scales up.
-const fit = (w: number, h: number, max: number) => {
+export const fit = (w: number, h: number, max: number) => {
   const s = Math.min(1, max / Math.max(w, h));
   return { width: Math.max(1, Math.round(w * s)), height: Math.max(1, Math.round(h * s)) };
 };

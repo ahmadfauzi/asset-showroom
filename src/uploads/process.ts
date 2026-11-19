@@ -1,8 +1,9 @@
 import type { WebGLRenderer } from 'three';
 import { checkSizes, detectKind, LIMITS, mapRole, MESSAGES } from './detect';
+import { processModel } from './model';
 import { newId } from './store';
 import { processTexture } from './texture';
-import { UploadError, type Upload } from './types';
+import { UploadError, type Upload, type UploadFiles } from './types';
 import { listZip, readZip } from './zip';
 
 // Decoders and canvases report running out of memory in these ways.
@@ -13,9 +14,9 @@ const outOfMemory = (error: unknown) =>
 // `notice` shows a toast for something that worked but needs saying.
 export async function processZip(
   file: File,
-  _renderer: WebGLRenderer,
+  renderer: WebGLRenderer,
   onProgress: (fraction: number) => void,
-  _notice: (message: string) => void,
+  notice: (message: string) => void,
 ): Promise<Upload> {
   try {
     // Checked before reading, so a huge file is never loaded into memory.
@@ -23,17 +24,26 @@ export async function processZip(
     const data = new Uint8Array(await file.arrayBuffer());
     const entries = listZip(data);
     checkSizes(file.size, entries);
-    const { kind } = detectKind(entries);
-    if (kind !== 'texture') throw new UploadError(MESSAGES.nothing);
+    const { kind, main } = detectKind(entries);
+    if (kind === 'hdri') throw new UploadError(MESSAGES.nothing);
     onProgress(0.1);
 
-    // Only the maps are unpacked. Folders and previews are skipped, as in detectKind.
+    // Only what is needed is unpacked: the maps, and for a model its mesh file, any .bin and every image.
+    // Folders and previews are skipped, as in detectKind.
+    const wanted = (name: string) => (kind === 'model' ? /\.(bin|jpe?g|png|webp)$/i.test(name) : mapRole(name));
     const names = entries
       .map((entry) => entry.name)
-      .filter((name) => !name.endsWith('/') && !name.toLowerCase().includes('preview') && mapRole(name));
+      .filter((name) => name === main || (!name.endsWith('/') && !name.toLowerCase().includes('preview') && wanted(name)));
     const unpacked = await readZip(data, names);
     onProgress(0.3);
-    const { files, thumb } = await processTexture(unpacked);
+    let files: UploadFiles, thumb: Blob;
+    if (kind === 'model') {
+      const model = await processModel(unpacked, main, renderer);
+      if (model.resized) notice("This model's size looked wrong, so it's now 1 m tall.");
+      ({ files, thumb } = model);
+    } else {
+      ({ files, thumb } = await processTexture(unpacked));
+    }
     onProgress(1);
 
     return {
@@ -43,7 +53,7 @@ export async function processZip(
       created: Date.now(),
       bytes: thumb.size + Object.values(files).reduce((sum, blob: Blob) => sum + blob.size, 0),
       thumb,
-      sizeCm: [100, 100],
+      ...(kind === 'texture' && { sizeCm: [100, 100] as [number, number] }),
       files,
     };
   } catch (error) {

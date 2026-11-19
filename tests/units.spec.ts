@@ -178,3 +178,85 @@ test('uploads: texture processing packs ORM and flips DX normals', async ({ page
   expect(near(r.gloss.orm, [255, 63, 0])).toBe(true); // roughness = 255 - 192
   expect(r.metal.thumb).toBe(64); // never scaled up past the source
 });
+
+// The model tests need the app's renderer, which the app puts on window.showroom with the fixture set.
+const openApp = async (page: Page) => {
+  test.slow();
+  await page.goto('/');
+  await expect(page.locator('#loader')).toHaveClass(/done/);
+};
+
+test('uploads: models get metres, a colour map and a sane size', async ({ page }) => {
+  await openApp(page);
+  const zips = Object.fromEntries(['model-fbx.zip', 'model-glb.zip', 'model-huge.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
+  const r = await page.evaluate(async (zips) => {
+    const p = await import('/src/uploads/process.ts');
+    const m = await import('/src/uploads/model.ts');
+    const { renderer } = (window as any).showroom;
+    const results: Record<string, { kind: string; height: number; base: number; map: boolean; notices: string[]; thumb: number[] }> = {};
+    for (const [name, bytes] of Object.entries(zips)) {
+      const notices: string[] = [];
+      const upload = await p.processZip(new File([new Uint8Array(bytes)], name), renderer, () => {}, (message) => notices.push(message));
+      // Loads the stored glb again and measures every mesh.
+      const glb = new Uint8Array(await (upload.files as { glb: Blob }).glb.arrayBuffer());
+      const object = await m.parseModel({ 'stored.glb': glb }, 'stored.glb', renderer);
+      object.updateMatrixWorld(true);
+      let box: any = null;
+      let map = false;
+      object.traverse((o: any) => {
+        if (!o.isMesh) return;
+        o.geometry.computeBoundingBox();
+        const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+        box = box ? box.union(b) : b;
+        map ||= !!o.material.map;
+      });
+      const thumb = await createImageBitmap(upload.thumb);
+      results[name] = { kind: upload.kind, height: box.max.y - box.min.y, base: box.min.y, map, notices, thumb: [thumb.width, thumb.height] };
+    }
+    return results;
+  }, zips);
+  const fbx = r['model-fbx.zip'], glb = r['model-glb.zip'], huge = r['model-huge.zip'];
+  expect(Math.abs(fbx.height - 0.3)).toBeLessThanOrEqual(0.01);
+  expect(fbx.map).toBe(true);
+  expect(Math.abs(glb.height - 0.5)).toBeLessThanOrEqual(0.01);
+  expect(Math.abs(huge.height - 1)).toBeLessThanOrEqual(0.01);
+  expect(huge.notices).toEqual(["This model's size looked wrong, so it's now 1 m tall."]);
+  expect([fbx.notices, glb.notices]).toEqual([[], []]);
+  for (const model of [fbx, glb, huge]) {
+    expect(model.kind).toBe('model');
+    expect(Math.abs(model.base)).toBeLessThan(0.001);
+    expect(model.thumb).toEqual([256, 256]);
+  }
+});
+
+test('uploads: the triangle limit', async ({ page }) => {
+  await openApp(page);
+  const r = await page.evaluate(async () => {
+    const m = await import('/src/uploads/model.ts');
+    const { renderer } = (window as any).showroom;
+    // A glb of 500,001 triangles without indices, every corner at the origin.
+    const count = 500_001 * 3;
+    const json = JSON.stringify({
+      asset: { version: '2.0' },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+      buffers: [{ byteLength: count * 12 }],
+      bufferViews: [{ buffer: 0, byteLength: count * 12 }],
+      accessors: [{ bufferView: 0, componentType: 5126, count, type: 'VEC3', min: [0, 0, 0], max: [0, 0, 0] }],
+    });
+    const text = new TextEncoder().encode(json.padEnd(Math.ceil(json.length / 4) * 4, ' '));
+    const glb = new Uint8Array(28 + text.length + count * 12);
+    const view = new DataView(glb.buffer);
+    [0x46546c67, 2, glb.length, text.length, 0x4e4f534a].forEach((value, i) => view.setUint32(i * 4, value, true));
+    glb.set(text, 20);
+    view.setUint32(20 + text.length, count * 12, true);
+    view.setUint32(24 + text.length, 0x004e4942, true);
+    const files = { 'Many.glb': glb };
+    const triangles = m.countTriangles(await m.parseModel(files, 'Many.glb', renderer));
+    const message = await m.processModel(files, 'Many.glb', renderer).then(() => 'processed', (error: Error) => error.message);
+    return { triangles, message };
+  });
+  expect(r).toEqual({ triangles: 500001, message: 'This model has more than 500,000 triangles.' });
+});
