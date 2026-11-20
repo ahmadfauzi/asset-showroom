@@ -193,11 +193,11 @@ test('at 375 px the Upload button and the Uploads tab fit', async ({ page }) => 
   await expect(uploadButton(page)).toBeInViewport({ ratio: 1 });
   await uploadsTab(page).click();
   await expect(uploadsTab(page)).toHaveAttribute('aria-pressed', 'true');
-  // The tab row scrolls sideways, so the tab must sit inside the row's visible part.
+  // The tab row scrolls sideways and fades out over its last 12% (hud.css), so the tab must sit left of the fade.
   const row = (await page.locator('#tabs').boundingBox())!;
   const tab = (await uploadsTab(page).boundingBox())!;
   expect(tab.x).toBeGreaterThanOrEqual(row.x);
-  expect(tab.x + tab.width).toBeLessThanOrEqual(row.x + row.width);
+  expect(tab.x + tab.width).toBeLessThanOrEqual(row.x + row.width * 0.88);
   const tray = (await page.locator('#tray').boundingBox())!;
   for (const id of ['#toolbar', '#rooms']) {
     const other = (await page.locator(id).boundingBox())!;

@@ -985,7 +985,7 @@ body.hud-hidden :is(#side, #right, #tray, #tooltip, #model-bar) {
   #tabs {
     overflow-x: auto;
     scrollbar-width: none;
-    padding-right: 12%;
+    padding-right: 15%;
     mask-image: linear-gradient(to right, #000 88%, transparent);
   }
 }
