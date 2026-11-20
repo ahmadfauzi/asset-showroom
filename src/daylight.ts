@@ -49,6 +49,8 @@ const FILL = { day: 0.3, night: 0.2 };
 const FILL_OUTDOORS = { day: 1.2, night: 1.6 };
 // An uploaded HDRI's brightness as the background and as the light (PRD 16.9). A tuning knob.
 const HDRI_LIGHT = 1;
+// The hemisphere fill while an HDRI shows. The HDRI's own light is the fill, so it is off. A tuning knob.
+const HDRI_FILL = 0;
 const UP = new Vector3(0, 1, 0);
 
 // Stars, about 1500 points 70 m from the middle of the room, inside the camera's far plane (100 m). They go all the way
@@ -134,6 +136,7 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
     for (const { button, hours } of presetButtons) button.setAttribute('aria-pressed', String(hours === time));
     // The HDRI sets the light. The time is still kept for the link and for when the drawn sky comes back.
     if (hdri) {
+      sky.intensity = HDRI_FILL;
       for (const lamp of lamps) lamp.intensity = 0;
       if (room) room.shade.emissiveIntensity = 0;
       stars.visible = false;

@@ -328,11 +328,12 @@ if (!gl) {
       },
     );
   };
-  // Back to the drawn sky and the clock.
+  // Back to the drawn sky and the clock. The button hides, so focus moves to the time slider.
   document.getElementById('time-of-day')!.addEventListener('click', () => {
     active.sky = null;
     showSky(active);
     commit();
+    document.querySelector<HTMLInputElement>('.time input')!.focus();
   });
   const undo = () => restore(stepBack(active.history));
   const redo = () => restore(stepForward(active.history));

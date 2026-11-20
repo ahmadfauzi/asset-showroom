@@ -795,6 +795,33 @@ test.describe('an HDRI sky', () => {
     await expect.poll(async () => (await background()).hdri).toBe(true);
     expect(errors).toEqual([]);
   });
+
+  test('the HDRI sets the fill light at any time, and time of day puts it back', async () => {
+    const fill = () => page.evaluate(() => (window as any).showroom.scene.children.find((c: any) => c.isHemisphereLight).intensity as number);
+    const timeOfDay = page.getByRole('button', { name: 'Time of day' });
+    const timeSlider = page.getByRole('slider', { name: 'Time of day' });
+    // At 12:00.
+    await expect.poll(() => hash(page)).toContain('t=12');
+    expect(await fill()).toBe(0);
+    await timeOfDay.click();
+    await expect.poll(() => hash(page)).not.toContain('sky=');
+    await expect(timeSlider).toBeFocused();
+    const day = await fill();
+    expect(day).toBeGreaterThan(0);
+    // At 22:00.
+    await timeSlider.press('End');
+    await expect.poll(() => hash(page)).toContain('t=22');
+    const night = await fill();
+    expect(night).not.toBe(day);
+    await uploadsTab(page).click();
+    await swatches(page).locator('.swatch').click();
+    await expect.poll(() => hash(page)).toContain('sky=u-');
+    expect(await fill()).toBe(0);
+    await timeOfDay.click();
+    await expect.poll(() => hash(page)).not.toContain('sky=');
+    expect(await fill()).toBe(night);
+    expect(errors).toEqual([]);
+  });
 });
 
 test.describe('on a narrow touch screen', () => {
