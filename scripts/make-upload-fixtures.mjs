@@ -158,25 +158,37 @@ zip('model-fbx.zip', { 'Box.fbx': fbx(30), 'Box_COL.png': await png('#2864c8') }
 zip('model-huge.zip', { 'Huge.glb': glb(10) });
 zip('model-interleaved.zip', { 'Strided.glb': glb(0.5, true) });
 
-// HDRIs: 512 x 256, black except a white 32 x 32 square centred at pixel (128, 64) from the top-left.
-// The sun test expects elevation +45 degrees and angle -90 degrees.
+// HDRIs: 512 x 256, a dim grey sky (0.05) in the upper half, black below, and a white 32 x 32 square centred at
+// pixel (128, 64) from the top-left. The sun test expects elevation +45 degrees and angle -90 degrees. The black
+// lower half makes them sky-only, so the Worker fills it from the grey just above the horizon.
 const [W, H] = [512, 256];
 const white = (x, top) => Math.abs(x + 0.5 - 128) < 16 && Math.abs(top + 0.5 - 64) < 16;
+const value = (x, top) => (white(x, top) ? 1 : top < H / 2 ? 0.05 : 0);
 // EXR data starts at the bottom row, as EXRLoader gives it and EXRExporter expects it.
 const pixels = new Float32Array(W * H * 4);
 for (let row = 0; row < H; row++)
-  for (let x = 0; x < W; x++) pixels.set(white(x, H - 1 - row) ? [1, 1, 1, 1] : [0, 0, 0, 1], (row * W + x) * 4);
+  for (let x = 0; x < W; x++) {
+    const v = value(x, H - 1 - row);
+    pixels.set([v, v, v, 1], (row * W + x) * 4);
+  }
 const texture = new DataTexture(pixels, W, H, RGBAFormat, FloatType);
 const exr = await new EXRExporter().parse(texture, { type: HalfFloatType });
 zip('hdri-exr.zip', { 'Sky_HDR.exr': exr });
 // The same file cut to 400 bytes, inside the table of chunk offsets (bytes 331 to 458). The header is whole, and
 // EXRLoader reads past the end, which throws a RangeError. Cut in half instead, it fails with "unexpected EOF".
 zip('hdri-cut.zip', { 'Sky_HDR.exr': exr.slice(0, 400) });
-// Flat RGBE, top row first. A black first pixel tells HDRLoader the data is not run-length encoded.
-const rgbe = new Uint8Array(W * H * 4);
-for (let top = 0; top < H; top++) for (let x = 0; x < W; x++) if (white(x, top)) rgbe.set([255, 255, 255, 128], (top * W + x) * 4);
+// Flat RGBE, top row first. HDRLoader reads data as run-length encoded only if it starts with the bytes 2, 2.
+// 1 is (255, 255, 255, 128), 0.05 is (204, 204, 204, 124) and 0.18 is about (184, 184, 184, 126).
+const RGBE = { 1: [255, 255, 255, 128], 0.05: [204, 204, 204, 124], 0.18: [184, 184, 184, 126], 0: [0, 0, 0, 0] };
+const hdr = (valueAt) => {
+  const data = new Uint8Array(W * H * 4);
+  for (let top = 0; top < H; top++) for (let x = 0; x < W; x++) data.set(RGBE[valueAt(x, top)], (top * W + x) * 4);
+  return data;
+};
 const hdrHeader = (w, h) => bytes(`#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y ${h} +X ${w}\n`);
-zip('hdri-hdr.zip', { 'Sky.hdr': new Uint8Array([...hdrHeader(W, H), ...rgbe]) });
+zip('hdri-hdr.zip', { 'Sky.hdr': new Uint8Array([...hdrHeader(W, H), ...hdr(value)]) });
+// Not sky-only: a bright upper half (1) and a mid-grey lower half (0.18), which the Worker leaves alone.
+zip('hdri-full.zip', { 'Full.hdr': new Uint8Array([...hdrHeader(W, H), ...hdr((x, top) => (top < H / 2 ? 1 : 0.18))]) });
 zip('hdri-16k.zip', { 'Big.hdr': new Uint8Array([...hdrHeader(16384, 8192), 0, 0, 0, 0, 0, 0, 0, 0]) });
 // A 16K header that HDRLoader still reads: over 4 KB of comments, and double spaces and a tab on the size line.
 const comments = '# a comment line that pads the header\n'.repeat(150);

@@ -266,21 +266,31 @@ test('uploads: the triangle limit', async ({ page }) => {
 
 test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page }) => {
   await openApp(page);
-  const zips = Object.fromEntries(['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-16k.zip', 'hdri-16k-spaced.zip', 'hdri-cut.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
+  const names = ['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-full.zip', 'hdri-16k.zip', 'hdri-16k-spaced.zip', 'hdri-cut.zip'];
+  const zips = Object.fromEntries(names.map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
   const r = await page.evaluate(async (zips) => {
     const p = await import('/src/uploads/process.ts');
     const { UploadError } = await import('/src/uploads/types.ts');
-    // EXRLoader at the URL Vite gives the Worker's import, to read the stored file back.
+    // EXRLoader and three at the URLs Vite gives the Worker's imports, to read the stored file back as floats.
     const worker = await (await fetch('/src/uploads/hdri.worker.ts')).text();
     const { EXRLoader } = await import(worker.match(/from ["']([^"']*EXRLoader[^"']*)["']/)![1]);
+    const { FloatType } = await import(worker.match(/from ["']([^"']*deps\/three\.js[^"']*)["']/)![1]);
     const { renderer } = (window as any).showroom;
-    const results: Record<string, { kind?: string; sun?: unknown; size?: number[]; thumb?: number[]; error?: string }> = {};
+    type Result = { kind?: string; sun?: unknown; size?: number[]; thumb?: number[]; error?: string; column?: Record<string, number>; lowerError?: number };
+    const results: Record<string, Result> = {};
     for (const [name, bytes] of Object.entries(zips)) {
       try {
         const upload = await p.processZip(new File([new Uint8Array(bytes)], name), renderer, () => {}, () => {});
-        const exr = new EXRLoader().parse(await (upload.files as { exr: Blob }).exr.arrayBuffer());
+        const exr = new EXRLoader().setDataType(FloatType).parse(await (upload.files as { exr: Blob }).exr.arrayBuffer());
         const thumb = await createImageBitmap(upload.thumb);
-        results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height] };
+        // Rows are bottom first, so the lower half is rows 0 to 127 and row 127 is just below the horizon.
+        const { data, width } = exr as { data: Float32Array; width: number };
+        const at = (x: number, row: number) => (row * width + x) * 4;
+        const luminance = (x: number, row: number) => 0.2126 * data[at(x, row)] + 0.7152 * data[at(x, row) + 1] + 0.0722 * data[at(x, row) + 2];
+        let lowerError = 0;
+        for (let i = 0; i < at(0, 128); i += 4) for (let c = 0; c < 3; c++) lowerError = Math.max(lowerError, Math.abs(data[i + c] - (184 / 255) * 0.25));
+        const column = { below: luminance(300, 127), middle: luminance(300, 64), bottom: luminance(300, 2) };
+        results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height], column, lowerError };
       } catch (error) {
         // The toast uploader.ts shows: an UploadError's message, otherwise "Couldn't read this zip.".
         results[name] = { error: error instanceof UploadError ? error.message : "Couldn't read this zip." };
@@ -297,10 +307,60 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
     color.forEach((value) => expect(value).toBeCloseTo(1, 3));
     expect(size).toEqual([512, 256]);
     expect(thumb).toEqual([256, 128]);
+    // Sky-only: the black lower half is filled from the grey above the horizon, darker towards the bottom.
+    const { below, middle, bottom } = r[name].column!;
+    expect(middle, `${name} lower half`).toBeGreaterThan(0);
+    expect(bottom, `${name} bottom`).toBeLessThan(below);
   }
+  // Not sky-only: the mid-grey lower half is kept, within half-float rounding.
+  expect(r['hdri-full.zip'].error).toBeUndefined();
+  expect(r['hdri-full.zip'].lowerError).toBeLessThan(0.002);
   expect(r['hdri-16k.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
   // Double spaces, a tab and over 4 KB of comments, which HDRLoader still reads.
   expect(r['hdri-16k-spaced.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
   // A cut EXR throws a RangeError while decoding. It is a read error, not the memory message.
   expect(r['hdri-cut.zip']).toEqual({ error: "Couldn't read this zip." });
+});
+
+test('uploads: fillBelowHorizon fills only sky-only images', async ({ page }) => {
+  const r = await run(page, async () => {
+    const { fillBelowHorizon } = await import('/src/uploads/horizon.ts');
+    // 8 x 4, bottom row first: rows 0 and 1 are below the horizon, rows 2 and 3 above it.
+    const image = (below: number[], above: (x: number) => number[]) => {
+      const data = new Float32Array(8 * 4 * 4);
+      for (let row = 0; row < 4; row++) for (let x = 0; x < 8; x++) data.set(row < 2 ? below : above(x), (row * 8 + x) * 4);
+      return data;
+    };
+    const pixel = (data: Float32Array, x: number, row: number) => [...data.slice((row * 8 + x) * 4, (row * 8 + x) * 4 + 4)];
+    const sky = image([0, 0, 0, 1], () => [0.2, 0.4, 0.6, 1]);
+    const skyFilled = fillBelowHorizon(sky, 8, 4);
+    // One bright column at x = 0. The blur wraps, so columns 1 and 7 get the same amount of it.
+    const seam = image([0, 0, 0, 1], (x) => (x === 0 ? [33, 33, 33, 1] : [0, 0, 0, 1]));
+    fillBelowHorizon(seam, 8, 4);
+    const full = image([0.1, 0.1, 0.1, 1], () => [1, 1, 1, 1]);
+    const before = [...full];
+    const fullFilled = fillBelowHorizon(full, 8, 4);
+    // Like the sunset HDRI: the sky (0.4) runs 3 rows below the middle of an 8 x 256 image, then black.
+    const spill = new Float32Array(8 * 256 * 4);
+    for (let row = 0; row < 256; row++) for (let x = 0; x < 8; x++) spill.set(row >= 125 ? [0.4, 0.4, 0.4, 1] : [0, 0, 0, 1], (row * 8 + x) * 4);
+    const spillFilled = fillBelowHorizon(spill, 8, 256);
+    return {
+      spillFilled,
+      skyFilled,
+      horizon: pixel(sky, 3, 1),
+      bottom: pixel(sky, 3, 0),
+      seam: [pixel(seam, 1, 1)[0], pixel(seam, 7, 1)[0]],
+      fullFilled,
+      fullSame: [...full].every((v, i) => v === before[i]),
+    };
+  });
+  expect(r.skyFilled).toBe(true);
+  [0.2, 0.4, 0.6, 1].forEach((v, i) => expect(r.horizon[i]).toBeCloseTo(v, 5));
+  [0.1, 0.2, 0.3, 1].forEach((v, i) => expect(r.bottom[i]).toBeCloseTo(v, 5));
+  expect(r.seam[0]).toBeGreaterThan(0);
+  expect(r.seam[0]).toBeCloseTo(r.seam[1], 5);
+  expect(r.fullFilled).toBe(false);
+  expect(r.fullSame).toBe(true);
+  // A little sky just below the middle row doesn't stop the fill.
+  expect(r.spillFilled).toBe(true);
 });

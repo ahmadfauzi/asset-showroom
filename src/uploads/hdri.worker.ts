@@ -2,6 +2,7 @@ import { DataTexture, DataUtils, FloatType, HalfFloatType, RGBAFormat } from 'th
 import { EXRExporter, ZIP_COMPRESSION } from 'three/examples/jsm/exporters/EXRExporter.js';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
+import { fillBelowHorizon } from './horizon';
 import { encodeImage, fit } from './texture';
 import { LIMITS, type SkySun } from './types';
 
@@ -134,6 +135,9 @@ self.onmessage = async ({ data: { name, bytes } }: MessageEvent<{ name: string; 
     const [W, H] = [Math.max(1, Math.round(decoded.width * s)), Math.max(1, Math.round(decoded.height * s))];
     // HDRLoader gives the top row first, EXRLoader the bottom row.
     const image = shrink(decoded.data, decoded.width, decoded.height, W, H, hdr, toNumber);
+    // Before the sun search. The filled rows are a dimmed blur of the rows just above the horizon, so the sun is
+    // still found above it.
+    fillBelowHorizon(image, W, H);
     const sun = findSun(image, W, H);
     const exr = await new EXRExporter().parse(new DataTexture(image, W, H, RGBAFormat, FloatType), { type: HalfFloatType, compression: ZIP_COMPRESSION });
     postMessage({ exr: new Blob([exr as BlobPart], { type: 'image/x-exr' }), thumb: await thumbnail(image, W, H), sun });
