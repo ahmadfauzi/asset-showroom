@@ -981,9 +981,11 @@ body.hud-hidden :is(#side, #right, #tray, #tooltip, #model-bar) {
     margin: 0;
   }
 
+  /* The end padding lets the last tab (Uploads) scroll clear of the fade. */
   #tabs {
     overflow-x: auto;
     scrollbar-width: none;
+    padding-right: 12%;
     mask-image: linear-gradient(to right, #000 88%, transparent);
   }
 }

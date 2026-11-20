@@ -186,6 +186,26 @@ test('at 375 px the toolbar fits while uploading', async ({ page }) => {
   expect(right).toBeLessThanOrEqual(375 - 8);
 });
 
+test('at 375 px the Upload button and the Uploads tab fit', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const errors = await open(page);
+  await expect(uploadButton(page)).toBeVisible();
+  await expect(uploadButton(page)).toBeInViewport({ ratio: 1 });
+  await uploadsTab(page).click();
+  await expect(uploadsTab(page)).toHaveAttribute('aria-pressed', 'true');
+  // The tab row scrolls sideways, so the tab must sit inside the row's visible part.
+  const row = (await page.locator('#tabs').boundingBox())!;
+  const tab = (await uploadsTab(page).boundingBox())!;
+  expect(tab.x).toBeGreaterThanOrEqual(row.x);
+  expect(tab.x + tab.width).toBeLessThanOrEqual(row.x + row.width);
+  const tray = (await page.locator('#tray').boundingBox())!;
+  for (const id of ['#toolbar', '#rooms']) {
+    const other = (await page.locator(id).boundingBox())!;
+    expect(other.y + other.height <= tray.y || tray.y + tray.height <= other.y, id).toBe(true);
+  }
+  expect(errors).toEqual([]);
+});
+
 const slot = (page: Page, name: string) => page.locator('.slot', { hasText: name });
 const floorMap = (page: Page) => page.evaluate(() => (window as any).showroom.materials().floor.map?.name);
 const floorRepeat = (page: Page) => page.evaluate(() => (window as any).showroom.materials().floor.map.repeat.toArray());
