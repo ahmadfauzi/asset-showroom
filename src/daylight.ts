@@ -307,6 +307,12 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
       setSkyTurn(next.turn);
       setTime(time);
     },
+    // Frees the environment map kept for the last HDRI, unless it shows. For a deleted HDRI (PRD 16.6).
+    dropSky() {
+      if (hdri || !hdriEnvironment) return;
+      hdriEnvironment.target.dispose();
+      hdriEnvironment = null;
+    },
     setSkyTurn,
     skyTurn: () => turn,
     // Call once per frame.

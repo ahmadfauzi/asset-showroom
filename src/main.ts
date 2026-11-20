@@ -36,7 +36,7 @@ import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
 import { createLibrary } from './uploads/library';
 import { createUploadsTab, MODEL_DRAG_TYPE } from './uploads/tab';
-import { LIMITS, MESSAGES, type AnyTexture, type Sky } from './uploads/types';
+import { LIMITS, MESSAGES, type AnyTexture, type Sky, type UploadMeta } from './uploads/types';
 import { createUploader } from './uploads/uploader';
 
 // One per room, made the first time the room is needed. It keeps the room's textures, time, snow and undo
@@ -274,8 +274,20 @@ if (!gl) {
     if (record(active.history, snapshot(active), (state) => toHash(key, state))) save();
   };
   // ponytail: a slot can't go back to having no texture. A full manifest gives every slot a default.
-  const restore = (state: RoomState | undefined) => {
-    if (!state) return;
+  const restore = (saved: RoomState | undefined) => {
+    if (!saved) return;
+    // Undo and redo skip uploads deleted since (PRD 16.6): their surfaces take the room's default.
+    const ids = library.ids();
+    const defaults = manifest.defaults[active.built.key] ?? {};
+    const textures = { ...saved.textures };
+    for (const [slot, slug] of Object.entries(textures) as [Slot, string][]) if (!findTexture(slug)) textures[slot] = defaults[slot];
+    const state: RoomState = {
+      ...saved,
+      textures,
+      models: saved.models.filter((m) => ids.has(m.id)),
+      sky: saved.sky && ids.has(saved.sky.id) ? saved.sky : null,
+    };
+    active.history.committed = state;
     for (const [slot, slug] of Object.entries(state.textures) as [Slot, string][]) {
       const texture = findTexture(slug);
       if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
@@ -384,13 +396,50 @@ if (!gl) {
       if (texture) use(texture);
     },
     onDelete(meta) {
-      if (!confirm(`Delete ${meta.name}?`)) return;
+      const rooms = usage(meta.id);
+      const n = rooms.length;
+      if (!confirm(n ? `Used in ${n} room${n > 1 ? 's' : ''}. Delete it?` : `Delete ${meta.name}?`)) return;
       library.remove(meta.id).then(
-        () => uploadsTab.setUploads(library.list()),
+        async () => {
+          uploadsTab.setUploads(library.list());
+          await Promise.all(rooms.map((key) => forget(sessions[key]!, meta.id)));
+          release(meta);
+        },
         () => toolbar.toast(`Couldn't delete ${meta.name}. Try again.`),
       );
     },
   });
+  // The rooms that use an upload on a surface, in a placement or as the sky.
+  const usage = (id: string) =>
+    (Object.keys(sessions) as RoomKey[]).filter((key) => {
+      const { latest, current, placed, sky } = sessions[key]!;
+      return (
+        Object.values(latest).includes(id) ||
+        Object.values(current).some((texture) => texture?.slug === id) ||
+        placed.some((p) => p.placement.id === id) ||
+        sky?.id === id
+      );
+    });
+  // Takes a deleted upload out of a room: surfaces go back to the room's defaults, its placements go and the sky goes
+  // back to the drawn one. It isn't an undo step (PRD 16.6). Settles once the defaults show.
+  const forget = (session: RoomSession, id: string) => {
+    const defaults = manifest.defaults[session.built.key] ?? {};
+    const resets = (Object.entries(defaults) as [Slot, string][])
+      .filter(([slot]) => session.latest[slot] === id || session.current[slot]?.slug === id)
+      .map(([slot, slug]) => applyTexture(session, slot, findTexture(slug)!));
+    const models = session.placed.filter((p) => p.placement.id !== id).map((p) => p.placement);
+    const removed = models.length < session.placed.length;
+    void placements.sync(session, models);
+    const sky = session.sky?.id === id;
+    if (sky) session.sky = null;
+    session.history.committed = snapshot(session);
+    if (session === active) {
+      if (removed) placements.select(null); // the selected model's index may have changed
+      if (sky) showSky(session);
+      save();
+    }
+    return Promise.all(resets);
+  };
   uploadsTab.setUploads(library.list());
   const uploader = createUploader({ library, tab: uploadsTab, toolbar, renderer, onAdded: () => {} });
 
@@ -582,6 +631,22 @@ if (!gl) {
       );
     }
     return loaded.get(slug)!;
+  };
+  // Frees what a deleted upload still holds, once no room shows it (PRD 16.6).
+  const release = ({ id, kind }: UploadMeta) => {
+    const maps = loaded.get(id);
+    loaded.delete(id);
+    progress.delete(id);
+    // A load still running is freed when it ends.
+    maps?.then(
+      (textures) => {
+        ready.delete(id);
+        for (const texture of textures) texture.dispose();
+      },
+      () => {},
+    );
+    library.release(id);
+    if (kind === 'hdri') daylight.dropSky();
   };
   const apply = (material: MeshStandardMaterial, [color, normal, orm]: Texture[]) => {
     Object.assign(material, { map: color, normalMap: normal, aoMap: orm, roughnessMap: orm, metalnessMap: orm });

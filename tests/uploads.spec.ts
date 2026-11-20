@@ -890,3 +890,126 @@ test.describe('on a narrow touch screen', () => {
     expect(errors).toEqual([]);
   });
 });
+
+// Deleting an upload that is in use (PRD 16.6), and the help about uploads (PRD 16.3).
+const roomButton = (page: Page, name: string) => page.locator('#rooms button', { hasText: name });
+const goTo = async (page: Page, name: string, key: string) => {
+  await roomButton(page, name).click();
+  await expect.poll(() => hash(page)).toContain(`room=${key}`);
+  await uploadsTab(page).click();
+};
+// Accepts the next confirm and gives its text.
+const accept = (page: Page) =>
+  new Promise<string>((resolve) =>
+    page.once('dialog', (dialog) => {
+      resolve(dialog.message());
+      void dialog.accept();
+    }),
+  );
+
+test('deleting a texture in use resets its surfaces in every room', async ({ page }) => {
+  waitsForUpload();
+  const errors = await open(page);
+  await upload(page, 'texture-metal.zip');
+  await uploadsTab(page).click();
+  await expect(swatches(page)).toHaveCount(1, done);
+  await slot(page, 'Floor').click();
+  await swatches(page).locator('.swatch').click();
+  await expect.poll(() => floorMap(page)).toMatch(/^u-/);
+  await goTo(page, 'Bedroom', 'bedroom');
+  await slot(page, 'Floor').click();
+  await swatches(page).locator('.swatch').click();
+  await expect.poll(() => floorMap(page)).toMatch(/^u-/);
+
+  const asked = accept(page);
+  await swatches(page).locator('.delete').click();
+  expect(await asked).toBe('Used in 2 rooms. Delete it?');
+  await expect(swatches(page)).toHaveCount(0);
+  await expect.poll(() => floorMap(page)).toBe('oak-fixture');
+  expect(await hash(page)).not.toContain('u-');
+  await goTo(page, 'Living room', 'living');
+  await expect.poll(() => floorMap(page)).toBe('oak-fixture');
+  expect(await hash(page)).not.toContain('u-');
+  expect(errors).toEqual([]);
+});
+
+test('deleting a placed model or the garden sky removes them', async ({ page }) => {
+  waitsForUpload();
+  const errors = await open(page);
+  const placed = () => page.evaluate(() => (window as any).showroom.placed().length as number);
+  const hdriShows = () => page.evaluate(() => (window as any).showroom.scene.background?.isDataTexture === true);
+  const model = swatches(page).filter({ has: page.getByRole('img', { name: 'Model' }) });
+  const sky = swatches(page).filter({ has: page.getByRole('img', { name: 'Sky' }) });
+  await upload(page, 'model-glb.zip');
+  await uploadsTab(page).click();
+  await expect(swatches(page)).toHaveCount(1, done);
+  await upload(page, 'hdri-hdr.zip');
+  await expect(swatches(page)).toHaveCount(2, done);
+  // The model in the Living room and the Garden, the sky in the Garden.
+  await model.locator('.swatch').click();
+  await expect.poll(() => hash(page)).toContain('&m=u-');
+  await goTo(page, 'Garden', 'garden');
+  await model.locator('.swatch').click();
+  await expect.poll(() => hash(page)).toContain('&m=u-');
+  await sky.locator('.swatch').click();
+  await expect.poll(() => hash(page)).toContain('sky=u-');
+  await expect.poll(hdriShows).toBe(true);
+
+  let asked = accept(page);
+  await model.locator('.delete').click();
+  expect(await asked).toBe('Used in 2 rooms. Delete it?');
+  await expect(swatches(page)).toHaveCount(1);
+  await expect.poll(() => hash(page)).not.toContain('&m=');
+  expect(await placed()).toBe(0);
+  await expect(page.locator('#model-bar')).toBeHidden();
+
+  asked = accept(page);
+  await sky.locator('.delete').click();
+  expect(await asked).toBe('Used in 1 room. Delete it?');
+  await expect(swatches(page)).toHaveCount(0);
+  await expect.poll(() => hash(page)).not.toContain('sky=');
+  await expect.poll(hdriShows).toBe(false);
+  await expect(page.getByRole('slider', { name: 'Time of day' })).toBeVisible();
+
+  await goTo(page, 'Living room', 'living');
+  expect(await placed()).toBe(0);
+  expect(await hash(page)).not.toContain('u-');
+  expect(errors).toEqual([]);
+});
+
+test('undo in another room after a delete skips the upload', async ({ page }) => {
+  waitsForUpload();
+  const errors = await open(page);
+  await upload(page, 'texture-metal.zip');
+  await goTo(page, 'Bedroom', 'bedroom');
+  await expect(swatches(page)).toHaveCount(1, done);
+  const start = await hash(page);
+  await slot(page, 'Floor').click();
+  await swatches(page).locator('.swatch').click();
+  await expect.poll(() => hash(page)).toContain('floor=u-');
+  const picked = await hash(page);
+  await page.keyboard.press(']');
+  await expect.poll(() => hash(page)).not.toBe(picked);
+
+  await goTo(page, 'Living room', 'living');
+  const asked = accept(page);
+  await swatches(page).locator('.delete').click();
+  expect(await asked).toBe('Used in 1 room. Delete it?');
+  await expect(swatches(page)).toHaveCount(0);
+
+  await goTo(page, 'Bedroom', 'bedroom');
+  expect(await hash(page)).not.toContain('u-');
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).toContain('t=12');
+  expect(await hash(page)).not.toContain('u-');
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).toBe(start);
+  await expect(page.locator('#toolbar [data-action="undo"]')).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test('the help explains uploads', async ({ page }) => {
+  await open(page);
+  await page.locator('#toolbar [data-action="help"]').click();
+  await expect(page.locator('#help')).toContainText('Uploads stay in this browser only.');
+});

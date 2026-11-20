@@ -15,6 +15,7 @@ export type Library = {
   setSize(id: string, sizeCm: [number, number]): Promise<void>;
   add(upload: Upload): Promise<void>;
   remove(id: string): Promise<void>;
+  release(id: string): void;
 };
 
 const repeat = (maps: Texture[], [width, height]: [number, number]) => {
@@ -65,8 +66,12 @@ export async function createLibrary(): Promise<Library> {
         }),
       );
       loaded[0].colorSpace = SRGBColorSpace;
-      repeat(loaded, texture(id)!.sizeCm);
-      maps.set(id, loaded);
+      // Not kept if the upload was deleted while it loaded.
+      const uploaded = texture(id);
+      if (uploaded) {
+        repeat(loaded, uploaded.sizeCm);
+        maps.set(id, loaded);
+      }
       return loaded;
     },
     // The stored glb, read once. Each placement gets its own copy, which shares the geometry and materials.
@@ -114,8 +119,30 @@ export async function createLibrary(): Promise<Library> {
     async remove(id) {
       await deleteUpload(id);
       list = list.filter((meta) => meta.id !== id);
+    },
+    // Frees what a removed upload still holds, once nothing shows it. The texture maps are main.ts's to dispose.
+    release(id) {
       if (thumbs.has(id)) URL.revokeObjectURL(thumbs.get(id)!);
       thumbs.delete(id);
+      textures.delete(id);
+      maps.delete(id);
+      // The placed copies share the model's geometry and materials.
+      void models.get(id)?.then(
+        (model) =>
+          model.traverse((object) => {
+            const mesh = object as Mesh;
+            if (!mesh.isMesh) return;
+            mesh.geometry.dispose();
+            for (const material of [mesh.material].flat()) {
+              for (const value of Object.values(material)) if ((value as Texture)?.isTexture) (value as Texture).dispose();
+              material.dispose();
+            }
+          }),
+        () => {},
+      );
+      models.delete(id);
+      void skies.get(id)?.then(({ texture }) => texture.dispose(), () => {});
+      skies.delete(id);
     },
   };
 }
