@@ -472,14 +472,16 @@ if (!gl) {
   let barSize = [0, 0]; // read when the bar shows, not every frame
   const placeBar = () => {
     const model = placements.selected();
-    if (model === null) return void (bar.hidden = true);
+    // A stale index hides the bar rather than throwing every frame.
+    const entry = model === null ? undefined : active.placed[model];
+    if (!entry) return void (bar.hidden = true);
     if (bar.hidden) {
       bar.hidden = false;
       barSize = [bar.offsetWidth, bar.offsetHeight];
     }
     const [width, height] = barSize;
     // A model that is still loading has no size, so its own position stands in.
-    const { object } = active.placed[model];
+    const { object } = entry;
     bounds.setFromObject(object).expandByPoint(object.getWorldPosition(corner));
     let left = Infinity;
     let right = -Infinity;
