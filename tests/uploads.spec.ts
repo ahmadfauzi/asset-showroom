@@ -921,6 +921,34 @@ test.describe('on a narrow touch screen', () => {
   });
 });
 
+test("a model that can't load is taken out of the room and the link", async ({ page }) => {
+  // A model upload whose stored file isn't a glb, put straight into the store.
+  await page.goto('/robots.txt');
+  await page.evaluate(async () => {
+    const s = await import('/src/uploads/store.ts');
+    const canvas = new OffscreenCanvas(8, 8);
+    canvas.getContext('2d')!.fillRect(0, 0, 8, 8);
+    const thumb = await canvas.convertToBlob();
+    await s.putUpload({ id: 'u-0000000f', kind: 'model', name: 'Broken', created: 1, bytes: 1, thumb, files: { glb: new Blob(['not a glb']) } });
+  });
+  const placed = () => page.evaluate(() => (window as any).showroom.placed().length as number);
+  const undoButton = page.locator('#toolbar [data-action="undo"]');
+  // From a link.
+  const errors = await open(page, '#v=2&room=living&m=u-0000000f,1,0,1,0');
+  await expect(page.locator('#toast')).toHaveText("Couldn't load Broken. Try again.");
+  expect(await hash(page)).not.toContain('&m=');
+  expect(await placed()).toBe(0);
+  await expect(undoButton).toBeDisabled();
+  // From the Uploads tab. It isn't an undo step.
+  await uploadsTab(page).click();
+  await swatches(page).locator('.swatch').click();
+  await expect.poll(placed).toBe(0);
+  expect(await hash(page)).not.toContain('&m=');
+  await expect(undoButton).toBeDisabled();
+  await expect(page.locator('#model-bar')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 // Deleting an upload that is in use (PRD 16.6), and the help about uploads (PRD 16.3).
 const roomButton = (page: Page, name: string) => page.locator('#rooms button', { hasText: name });
 const goTo = async (page: Page, name: string, key: string) => {

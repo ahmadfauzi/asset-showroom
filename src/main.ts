@@ -213,6 +213,16 @@ if (!gl) {
       }
       showSelection();
     },
+    // As for a texture that fails to load, the link and history are brought back in line with the room, without an
+    // undo step. Every session main.ts passes in is a RoomSession.
+    onFailed(session, id) {
+      const room = session as RoomSession;
+      room.history.committed = snapshot(room);
+      if (room !== active) return;
+      placements.select(null); // the selected model's index may have changed
+      save();
+      toolbar.toast(`Couldn't load ${library.get(id)?.name ?? 'the model'}. Try again.`);
+    },
   });
   const placeModel = (id: string, ray: Raycaster) => {
     if (library.get(id)?.kind !== 'model') return;

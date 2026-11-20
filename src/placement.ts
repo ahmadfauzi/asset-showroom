@@ -41,6 +41,7 @@ export function createPlacements({
   active,
   onCommit,
   onSelect,
+  onFailed,
 }: {
   camera: Camera;
   canvas: HTMLCanvasElement;
@@ -49,6 +50,7 @@ export function createPlacements({
   active: () => Session; // the room that shows
   onCommit: () => void;
   onSelect: (index: number | null) => void;
+  onFailed: (session: Session, id: string) => void; // after a model that failed to load is taken out of the room
 }) {
   const raycaster = new Raycaster();
   const pointer = new Vector2();
@@ -81,6 +83,7 @@ export function createPlacements({
 
   // Makes the room's placed models match the list. A model stays when its index and id still match, so undo,
   // redo and a link all use this. The list is in place at once; the promise settles when the new models are in.
+  // A model that fails to load leaves the room, if the list still holds it.
   const sync = async (session: Session, list: Placement[]) => {
     const { group } = session.built;
     const old = session.placed;
@@ -90,7 +93,18 @@ export function createPlacements({
       const object = reuse ?? new Group();
       if (!reuse) {
         group.add(object);
-        loads.push(library.loadModel(placement.id).then((model) => object.add(model), (error) => console.warn(error)));
+        loads.push(
+          library.loadModel(placement.id).then(
+            (model) => object.add(model),
+            (error) => {
+              console.warn(error);
+              if (!session.placed.some((p) => p.object === object)) return;
+              session.placed = session.placed.filter((p) => p.object !== object);
+              group.remove(object);
+              onFailed(session, placement.id);
+            },
+          ),
+        );
       }
       put(object, placement);
       return { placement, object };
