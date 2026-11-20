@@ -17,14 +17,31 @@ const ROLE_WORDS: [MapRole, string[]][] = [
 
 const ext = (name: string) => name.slice(name.lastIndexOf('.') + 1).toLowerCase();
 
-export const words = (fileName: string) =>
-  fileName.split('/').pop()!.toLowerCase().split(/[_\-. ]+/).filter(Boolean);
+// The file's own name, without its folders.
+export const baseName = (path: string) => path.split('/').pop()!;
 
-export function mapRole(fileName: string): MapRole | null {
+export const words = (fileName: string) =>
+  baseName(fileName).toLowerCase().split(/[_\-. ]+/).filter(Boolean);
+
+// Maps the app doesn't use.
+const IGNORED = ['disp', 'height', 'bump', 'refl', 'sss', 'opacity', 'alpha', 'mask'];
+
+// The map's role and the index of the word it came from (PRD 16.4). Words after a size word such as `4k` are
+// dropped, since Poliigon puts workflow words there (`Name_COL_4K_METALNESS.jpg`). Then the last word that starts
+// with a map word gives the role.
+export function mapWord(fileName: string): { role: MapRole; index: number } | null {
   if (!['jpg', 'jpeg', 'png', 'webp'].includes(ext(fileName))) return null;
   const w = words(fileName);
-  return ROLE_WORDS.find(([, names]) => names.some((n) => w.some((x) => x.startsWith(n))))?.[0] ?? null;
+  if (w.some((x) => IGNORED.some((n) => x.startsWith(n)))) return null;
+  const size = w.findIndex((x) => /^\d+k$/.test(x));
+  for (let index = (size < 0 ? w.length : size) - 1; index >= 0; index--) {
+    const role = ROLE_WORDS.find(([, names]) => names.some((n) => w[index].startsWith(n)))?.[0];
+    if (role) return { role, index };
+  }
+  return null;
 }
+
+export const mapRole = (fileName: string): MapRole | null => mapWord(fileName)?.role ?? null;
 
 export function checkSizes(zipBytes: number, entries: ZipEntry[]) {
   if (zipBytes > LIMITS.zipBytes) throw new UploadError(MESSAGES.zipSize);

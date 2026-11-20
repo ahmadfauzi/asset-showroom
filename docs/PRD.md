@@ -612,7 +612,17 @@ The zip's file list is read before anything is unpacked, so the size checks and 
 
 ### 16.4 Working out the kind
 
-The app checks the file names in the zip in this order. A file name is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Files with "preview" in the name are ignored.
+The app checks the file names in the zip in this order. Files with "preview" in the name are ignored.
+
+To find which map an image is, its file name (without folders) is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Then:
+
+- If any word starts with `disp`, `height`, `bump`, `refl`, `sss`, `opacity`, `alpha` or `mask`, the file is ignored.
+- Every word after a size word (`2k`, `4k`, `8k` and so on) is dropped. Poliigon puts workflow words there, as in `Name_COL_4K_METALNESS.jpg`.
+- The map comes from the last word left that matches a map word. So `NordicOak_Roughness.jpg` is a roughness map, not a normal map.
+
+A model's maps are grouped by the words before that word, so `PlantMonsteraVase001_COL_4K_METALNESS.jpg` is in the group `plantmonsteravase001`. This rule changed on 21 Nov 2026 after the final review. Before, any word could match, in the order colour, normal, AO, gloss, roughness, metalness, so `NordicOak_Roughness.jpg` counted as a normal map.
+
+The kind of upload:
 
 1. A `.glb`, `.gltf` or `.fbx` file: a model. If there are several, the largest is used.
 2. Otherwise, a `.blend`, `.max`, `.c4d` or `.ma` file: "Export it as .glb or .fbx first."

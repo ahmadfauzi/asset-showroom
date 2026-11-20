@@ -102,6 +102,10 @@ test('uploads: map roles and size limits', async ({ page }) => {
     const fails = (zip: number, entries: { name: string; size: number }[]) => { try { d.checkSizes(zip, entries); return 'ok'; } catch (error) { return (error as Error).message; } };
     return {
       roles: ['X_BaseColor.jpg', 'X_COL_4K.jpg', 'X_Colour.png', 'X_NormalDX.png', 'X_NRM.jpg', 'X_AmbientOcclusion.jpg', 'X_GLOSS_4K.jpg', 'X_Roughness.jpg', 'X_Metallic.jpg', 'X_METALNESS.jpg', 'X_REFL.jpg', 'X_SSS.jpg', 'X_Displacement.tiff', 'X_BaseColor.tiff'].map(d.mapRole),
+      // The rule from 21 Nov 2026 (PRD 16.4): ignored words, then words after a size word go, then the last map word.
+      named: ['NordicOak_Roughness.jpg', 'GlossyTile_Roughness.jpg', 'ColorfulTiles_Normal.png', 'ColdSteel_NRM.jpg', 'WoodFlooring044_DISP_2K_METALNESS.jpg', 'Poliigon_MetalPainted_7037_Displacement.jpg', 'Poliigon_MetalPainted_7037_Roughness.jpg', 'PlantMonstera001_COL_4K_METALNESS.jpg', 'PlantOrchid001_GLOSS_4K_SPECULAR.jpg', 'HdrSkySunset007_JPG_8K.jpg'].map(d.mapRole),
+      // The words before the one the role came from, which model.ts groups maps by.
+      prefix: d.mapWord('PlantMonsteraVase001_COL_4K_METALNESS.jpg'),
       words: d.words('2K/Poliigon_Stone-Quartzite 8060.BaseColor.jpg'),
       ok: fails(250 * 1024 ** 2, [{ name: 'a', size: 1024 ** 3 }]),
       bigZip: fails(250 * 1024 ** 2 + 1, []),
@@ -109,6 +113,8 @@ test('uploads: map roles and size limits', async ({ page }) => {
     };
   });
   expect(r.roles).toEqual(['color', 'color', 'color', 'normal', 'normal', 'ao', 'gloss', 'roughness', 'metalness', 'metalness', null, null, null, null]);
+  expect(r.named).toEqual(['roughness', 'roughness', 'normal', 'normal', null, null, 'roughness', 'color', 'gloss', null]);
+  expect(r.prefix).toEqual({ role: 'color', index: 1 });
   expect(r.words).toEqual(['poliigon', 'stone', 'quartzite', '8060', 'basecolor', 'jpg']);
   expect(r).toMatchObject({ ok: 'ok', bigZip: 'This zip is over 250 MB.', bigUnzipped: 'This zip unpacks to more than 1 GB.' });
 });

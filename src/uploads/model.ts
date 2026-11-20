@@ -29,7 +29,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as WebGLTextureUtils from 'three/examples/jsm/utils/WebGLTextureUtils.js';
-import { mapRole, words, type MapRole } from './detect';
+import { mapWord, words, type MapRole } from './detect';
 import { decode, encodeImage, fit } from './texture';
 import { LIMITS, MESSAGES, UploadError } from './types';
 
@@ -89,10 +89,10 @@ type MapSet = Partial<Record<MapRole, Texture>>;
 async function zipMaps(files: Record<string, Uint8Array>, flipY: boolean) {
   const picked = new Map<string, Map<MapRole, string>>();
   for (const [name, bytes] of Object.entries(files)) {
-    const role = mapRole(name);
-    if (!role) continue;
-    const w = words(name);
-    const prefix = w.slice(0, w.findIndex((x) => mapRole(`${x}.png`) === role)).join('');
+    const found = mapWord(name);
+    if (!found) continue;
+    const { role, index } = found;
+    const prefix = words(name).slice(0, index).join('');
     if (!picked.has(prefix)) picked.set(prefix, new Map());
     const group = picked.get(prefix)!;
     if (bytes.length > (files[group.get(role)!]?.length ?? -1)) group.set(role, name);
