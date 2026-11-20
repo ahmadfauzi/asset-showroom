@@ -1,6 +1,6 @@
 # Asset Showroom PRD
 
-As of 9 Oct 2026, v2 section added 17 Nov 2026, v3 section added 18 Nov 2026 · Ahmad Fauzi · Status: v2 built, v3 draft
+As of 9 Oct 2026, v2 section added 17 Nov 2026, v3 section added 18 Nov 2026 · Ahmad Fauzi · Status: v3 built
 
 Reference: *Set the Mood (sael.net/interior) Replication Knowledge Base*, 7 Oct 2026. "The reference" below means that site.
 
@@ -726,6 +726,19 @@ Undo compares link strings (`src/history.ts`), so every undo step must be in the
 - Uploads come from IndexedDB, not the network, so they don't count toward the 15 MB budget. The loader waits for the uploads the link uses, as it waits for the room's textures.
 - The 60 and 30 fps targets apply with 10 placed models. Checked: the orchid has 263,960 triangles. GTAO still turns off first under 30 fps.
 
+Measured on 21 Nov 2026, on the `v3-uploads` branch at commit 98ec516:
+
+- Start-up JavaScript (`VITE_ASSET_SET=fixture npx vite build`, the entry script and the chunks `index.html` preloads): 915,516 bytes. Before v3 it was 877,165 bytes, so v3 adds 38,351 bytes. The limit is 928,365 bytes (877,165 plus 50 KB).
+- Stored sizes of the example uploads (`bytes` in the store: the files and the thumbnail), uploaded through the Upload button in headless Chromium:
+
+| Upload | Kind | Stored | Upload took |
+| --- | --- | --- | --- |
+| `Poliigon_StoneQuartzite_8060.zip` | Texture | 3,570,742 bytes (3.6 MB) | 94 s |
+| `PlantOrchid001.zip` | Model, 42.8 cm tall | 11,316,128 bytes (11.3 MB) | 151 s |
+| `HdrSkySunset007.zip` | HDRI | 2,657,218 bytes (2.7 MB) | 36 s |
+
+- HDRI decode time: on 20 Nov 2026, before the horizon fill, the sunset HDRI (8192 × 4096 EXR) took 16.4 s from zip to stored sky in headless Chromium. Most of the time is the decode in the Worker (9.3 s of one 11.4 s run). The 36 s above was on a busy machine. Times on this machine ranged from 11 s to 114 s across runs, depending on load.
+
 ### 16.12 Safety
 
 - Zips are untrusted. Only the file list and the needed files are read. Nothing from a zip is run or inserted as HTML. Names are set with `textContent`.
@@ -765,6 +778,6 @@ Manual: the four example zips in Chrome, Edge, Safari and Firefox on desktop; on
 
 | Question | Owner |
 | --- | --- |
-| Can phones decode an 8K EXR, or should phones get a lower HDRI limit? Check on one phone in milestone 4. | Ahmad |
+| Can phones decode an 8K EXR, or should phones get a lower HDRI limit? Check on one phone in milestone 4. Not checked yet (21 Nov 2026): waiting on Ahmad's check on a phone. | Ahmad |
 | Is 100 × 100 cm the right starting size for uploaded textures? | Ahmad |
-| Do 10 orchids (about 2.6 million triangles) hold 30 fps on the Windows laptop? If not, lower the cap or the triangle limit. Check in milestone 5. | Ahmad |
+| Do 10 orchids (about 2.6 million triangles) hold 30 fps on the Windows laptop? If not, lower the cap or the triangle limit. Check in milestone 5. Not checked yet (21 Nov 2026): waiting on Ahmad's check on the laptop. | Ahmad |
