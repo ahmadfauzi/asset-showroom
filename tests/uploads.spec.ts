@@ -658,6 +658,137 @@ test.describe('placed models', () => {
   });
 });
 
+// One HDRI upload, used in turn by each test in this group (PRD 16.9 and 16.10).
+test.describe('an HDRI sky', () => {
+  test.describe.configure({ mode: 'serial' });
+  let page: Page;
+  let errors: string[];
+
+  const background = () =>
+    page.evaluate(() => {
+      const { scene } = (window as any).showroom;
+      return { hdri: scene.background?.isDataTexture === true, color: scene.background?.isColor === true, turn: [scene.backgroundRotation.y, scene.environmentRotation.y] };
+    });
+  // The stars are Points with a PointsMaterial. The snow flakes are Points too, with a ShaderMaterial.
+  const starsShow = () =>
+    page.evaluate(() => (window as any).showroom.scene.children.some((c: any) => c.isPoints && c.material.isPointsMaterial && c.visible));
+  const sunDirection = () =>
+    page.evaluate(() => {
+      const sun = (window as any).showroom.scene.children.find((c: any) => c.isDirectionalLight);
+      return sun.position.clone().normalize().toArray() as number[];
+    });
+  const turnSky = (degrees: number) =>
+    page.getByRole('slider', { name: 'Turn sky' }).evaluate((input: HTMLInputElement, degrees) => {
+      input.value = String(degrees);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, degrees);
+  const presets = () => page.locator('#daylight .presets button');
+  const garden = () => page.locator('#rooms button', { hasText: 'Garden' });
+  const living = () => page.locator('#rooms button', { hasText: 'Living room' });
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+  test.afterAll(() => page.close());
+
+  test('sky swatches are greyed out indoors', async () => {
+    waitsForUpload();
+    errors = await open(page);
+    await upload(page, 'hdri-hdr.zip');
+    await uploadsTab(page).click();
+    await expect(swatches(page)).toHaveCount(1, done);
+    await expect(swatches(page).getByRole('img', { name: 'Sky' })).toBeVisible();
+    await expect(swatches(page).locator('.swatch')).toBeDisabled();
+    await expect(swatches(page)).toHaveAttribute('title', 'Skies work in the Garden.');
+    expect(errors).toEqual([]);
+  });
+
+  test('an HDRI becomes the garden sky and greys out the clock', async () => {
+    await garden().click();
+    await expect.poll(() => hash(page)).toContain('room=garden');
+    await page.evaluate(() => ((window as any).showroom.gtao.enabled = false));
+    await uploadsTab(page).click();
+    await expect(swatches(page).locator('.swatch')).toBeEnabled();
+    await swatches(page).locator('.swatch').click();
+    await expect.poll(() => hash(page)).toMatch(/sky=u-[0-9a-f]{8}&sr=0/);
+    for (const preset of await presets().all()) await expect(preset).toBeDisabled();
+    await expect(page.getByText('The HDRI sets the light.')).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Turn sky' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Time of day' })).toBeVisible();
+    await expect.poll(async () => (await background()).hdri).toBe(true);
+    expect(await starsShow()).toBe(false);
+    expect(errors).toEqual([]);
+  });
+
+  test('turn sky is in the link and in undo', async () => {
+    await turnSky(90);
+    await expect.poll(() => hash(page)).toContain('sr=90');
+    // The fixture's sun is at about (0, 0.707, -0.707). A quarter turn takes it to about (-0.707, 0.707, 0).
+    const [x, y, z] = await sunDirection();
+    expect(Math.abs(x + 0.707)).toBeLessThan(0.1);
+    expect(Math.abs(y - 0.707)).toBeLessThan(0.1);
+    expect(Math.abs(z)).toBeLessThan(0.1);
+    expect((await background()).turn.map((r) => r.toFixed(3))).toEqual([(Math.PI / 2).toFixed(3), (Math.PI / 2).toFixed(3)]);
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => hash(page)).toContain('sr=0');
+    expect(errors).toEqual([]);
+  });
+
+  test('[ and ] do nothing while an HDRI shows', async () => {
+    const before = await hash(page);
+    await page.keyboard.press(']');
+    await page.keyboard.press('[');
+    expect(await hash(page)).toBe(before);
+    expect(errors).toEqual([]);
+  });
+
+  test('the sky stays in the Garden across a room switch', async () => {
+    await turnSky(90);
+    await expect.poll(() => hash(page)).toContain('sr=90');
+    await living().click();
+    await expect.poll(() => hash(page)).toContain('room=living');
+    await expect.poll(background).toEqual({ hdri: false, color: true, turn: [0, 0] });
+    await garden().click();
+    await expect.poll(() => hash(page)).toContain('room=garden');
+    expect(await hash(page)).toContain('sr=90');
+    await expect.poll(async () => (await background()).hdri).toBe(true);
+    await page.waitForTimeout(1000);
+    expect((await background()).hdri).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test('a link with a sky restores it after a reload, and snow still toggles with a sky on', async () => {
+    const link = await hash(page);
+    await page.reload();
+    await expect(page.locator('#loader')).toHaveClass(/done/);
+    expect(await hash(page)).toBe(link);
+    expect((await background()).hdri).toBe(true);
+    await expect(page.getByRole('slider', { name: 'Turn sky' })).toHaveValue('90');
+    await page.evaluate(() => ((window as any).showroom.gtao.enabled = false));
+    await page.locator('#snow').click();
+    await expect.poll(() => hash(page)).toContain('snow=1');
+    expect(await hash(page)).toMatch(/sky=u-[0-9a-f]{8}&sr=90/);
+    expect((await background()).hdri).toBe(true);
+    await page.locator('#snow').click();
+    await expect.poll(() => hash(page)).not.toContain('snow=1');
+    expect(errors).toEqual([]);
+  });
+
+  test('time of day goes back to the drawn sky', async () => {
+    await page.getByRole('button', { name: 'Time of day' }).click();
+    await expect.poll(() => hash(page)).not.toContain('sky=');
+    for (const preset of await presets().all()) await expect(preset).toBeEnabled();
+    await expect(page.getByRole('slider', { name: 'Time of day' })).toBeVisible();
+    await expect(page.getByText('The HDRI sets the light.')).toBeHidden();
+    await expect.poll(async () => (await background()).hdri).toBe(false);
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => hash(page)).toContain('sky=u-');
+    await expect.poll(async () => (await background()).hdri).toBe(true);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('on a narrow touch screen', () => {
   test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
 

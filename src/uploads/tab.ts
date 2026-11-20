@@ -42,6 +42,7 @@ export function createUploadsTab({
   const root = document.getElementById('upload-swatches')!;
   const empty = element('div', 'empty', 'Upload a .zip with a texture, a model or an HDRI. It stays in this browser.');
   let list: UploadMeta[] = [];
+  let room: RoomKey | null = null;
   let card: { node: HTMLElement; bar: HTMLProgressElement } | null = null;
 
   const swatch = (meta: UploadMeta) => {
@@ -57,6 +58,11 @@ export function createUploadsTab({
     image.draggable = false;
     use.append(image, element('span', 'label', meta.name));
     use.addEventListener('click', () => onUse(meta));
+    // Skies only work outdoors (PRD 16.6). The title is on the swatch, since a disabled button may not show one.
+    if (meta.kind === 'hdri' && room !== 'garden') {
+      use.disabled = true;
+      node.title = 'Skies work in the Garden.';
+    }
     const dragType = meta.kind === 'texture' ? DRAG_TYPE : meta.kind === 'model' ? MODEL_DRAG_TYPE : null;
     if (dragType) {
       use.draggable = true;
@@ -111,7 +117,10 @@ export function createUploadsTab({
       }
       card.bar.value = fraction;
     },
-    // Only sky swatches depend on the room (PRD 16.6), and there are no sky uploads yet.
-    setRoom(_room: RoomKey) {},
+    // Only sky swatches depend on the room (PRD 16.6).
+    setRoom(next: RoomKey) {
+      room = next;
+      render();
+    },
   };
 }

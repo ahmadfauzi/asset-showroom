@@ -1,7 +1,7 @@
-import { RepeatWrapping, SRGBColorSpace, Texture, type Group, type Mesh } from 'three';
+import { RepeatWrapping, SRGBColorSpace, Texture, type DataTexture, type Group, type Mesh } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { deleteUpload, getFiles, listUploads, putUpload, setSize as saveSize } from './store';
-import type { TextureFiles, Upload, UploadedTexture, UploadMeta } from './types';
+import type { SkySun, TextureFiles, Upload, UploadedTexture, UploadMeta } from './types';
 
 export type Library = {
   list(): UploadMeta[];
@@ -11,6 +11,7 @@ export type Library = {
   texture(id: string): UploadedTexture | undefined;
   loadTexture(id: string): Promise<Texture[]>;
   loadModel(id: string): Promise<Group>;
+  loadSky(id: string): Promise<{ texture: DataTexture; sun: SkySun }>;
   setSize(id: string, sizeCm: [number, number]): Promise<void>;
   add(upload: Upload): Promise<void>;
   remove(id: string): Promise<void>;
@@ -32,6 +33,7 @@ export async function createLibrary(): Promise<Library> {
   const textures = new Map<string, UploadedTexture>();
   const maps = new Map<string, Texture[]>();
   const models = new Map<string, Promise<Group>>();
+  const skies = new Map<string, ReturnType<Library['loadSky']>>();
   const get = (id: string) => list.find((meta) => meta.id === id);
   const thumb = (id: string) => {
     if (!thumbs.has(id)) thumbs.set(id, URL.createObjectURL(get(id)!.thumb));
@@ -83,6 +85,19 @@ export async function createLibrary(): Promise<Library> {
         models.set(id, loading);
       }
       return (await models.get(id)!).clone();
+    },
+    // The stored 2K .exr and its sun (PRD 16.9), read once.
+    loadSky(id) {
+      if (!skies.has(id)) {
+        const loading = (async () => {
+          const [{ readSky }, files] = await Promise.all([import('./sky'), getFiles(id)]);
+          return { texture: await readSky((files as { exr: Blob }).exr), sun: get(id)?.sun ?? null };
+        })();
+        // Forget a failed read so the next use tries again.
+        loading.catch(() => skies.delete(id));
+        skies.set(id, loading);
+      }
+      return skies.get(id)!;
     },
     // Changes the upload everywhere it shows, in every room (PRD 16.7).
     async setSize(id, sizeCm) {

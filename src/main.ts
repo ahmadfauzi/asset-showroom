@@ -36,7 +36,7 @@ import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
 import { createLibrary } from './uploads/library';
 import { createUploadsTab, MODEL_DRAG_TYPE } from './uploads/tab';
-import { LIMITS, MESSAGES, type AnyTexture } from './uploads/types';
+import { LIMITS, MESSAGES, type AnyTexture, type Sky } from './uploads/types';
 import { createUploader } from './uploads/uploader';
 
 // One per room, made the first time the room is needed. It keeps the room's textures, time, snow and undo
@@ -51,6 +51,7 @@ type RoomSession = {
   flakes?: ReturnType<typeof createSnow>; // the Garden only
   loads: Promise<unknown>[]; // the default textures and models, which the loader waits for
   placed: Placed[]; // uploaded models, in placing order (PRD 16.8)
+  sky: Sky; // the Garden only (PRD 16.9)
 };
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -94,7 +95,11 @@ if (!gl) {
 
   // OrbitControls zooms in steps, so the wheel sets a target distance and the loop eases towards it.
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const daylight = createDaylight(scene, renderer, reducedMotion, () => commit());
+  // The Turn sky slider only changes the daylight's turn, so it is copied to the room here.
+  const daylight = createDaylight(scene, renderer, reducedMotion, () => {
+    if (active.sky) active.sky = { ...active.sky, turn: daylight.skyTurn() };
+    commit();
+  });
   const ease = reducedMotion ? 1 : 0.12;
   let distance = 0;
   canvas.addEventListener(
@@ -258,7 +263,7 @@ if (!gl) {
     time: session === active ? daylight.target() : session.time,
     snow: session.snow,
     models: session.placed.map((p) => p.placement),
-    sky: null,
+    sky: session.sky,
   });
   const save = () => {
     window.history.replaceState(null, '', toHash(active.built.key, active.history.committed));
@@ -280,6 +285,8 @@ if (!gl) {
     const model = placements.selected();
     placements.select(model !== null && active.placed[model] ? model : null);
     daylight.setTime(state.time);
+    active.sky = state.sky;
+    showSky(active);
     active.snow = state.snow;
     showSnow();
     save();
@@ -299,6 +306,32 @@ if (!gl) {
   snowButton.addEventListener('click', () => {
     active.snow = !active.snow;
     showSnow();
+    commit();
+  });
+  // Shows the room's sky. An HDRI shows once it is read from the store, if it is still the sky of the room that
+  // shows (PRD 16.9). If it can't be read, the room goes back to the drawn sky, as a texture does to its last one.
+  const showSky = (session: RoomSession) => {
+    const { sky } = session;
+    if (!sky) return daylight.setSky(null);
+    daylight.setSkyTurn(sky.turn);
+    library.loadSky(sky.id).then(
+      (loaded) => session === active && session.sky?.id === sky.id && daylight.setSky({ ...loaded, turn: session.sky.turn }),
+      (error) => {
+        console.error(error);
+        if (session.sky?.id !== sky.id) return;
+        session.sky = null;
+        session.history.committed = snapshot(session);
+        if (session !== active) return;
+        daylight.setSky(null);
+        save();
+        toolbar.toast(`Couldn't load ${library.get(sky.id)?.name ?? 'the sky'}. Try again.`);
+      },
+    );
+  };
+  // Back to the drawn sky and the clock.
+  document.getElementById('time-of-day')!.addEventListener('click', () => {
+    active.sky = null;
+    showSky(active);
     commit();
   });
   const undo = () => restore(stepBack(active.history));
@@ -340,6 +373,12 @@ if (!gl) {
     thumb: library.thumb,
     onUse(meta) {
       if (meta.kind === 'model') return placeModel(meta.id, aim(0, 0));
+      // Sky swatches only work in the Garden, where the tab enables them.
+      if (meta.kind === 'hdri') {
+        active.sky = { id: meta.id, turn: 0 };
+        showSky(active);
+        return commit();
+      }
       const texture = library.texture(meta.id);
       if (texture) use(texture);
     },
@@ -417,7 +456,8 @@ if (!gl) {
       if (event.key === 'Delete' || event.key === 'Backspace') placements.remove();
     }
     if (event.key === 'r' || event.key === 'R') resetView();
-    if (event.key === '[' || event.key === ']') {
+    // The HDRI sets the light, so there is no time to move (PRD 16.9).
+    if ((event.key === '[' || event.key === ']') && !active.sky) {
       daylight.setTime(daylight.target() + (event.key === ']' ? 1 : -1));
       commit();
     }
@@ -656,11 +696,14 @@ if (!gl) {
       history: createHistory<RoomState>({ textures: {}, time, snow, models: [], sky: null }), // replaced below, once the picks are in
       time,
       snow,
+      // The link's sky, if it is an HDRI in this browser. The loader waits for it (PRD 16.11).
+      sky: fromLink && link.sky && library.get(link.sky.id)?.kind === 'hdri' ? link.sky : null,
       loads: [built.models.then((failed) => failed.length && session === active && toolbar.toast("Couldn't load some decor. The room still works."))],
       placed: [],
     };
     // The link's models, if they are uploaded models in this browser (PRD 16.10).
     if (fromLink) session.loads.push(placements.sync(session, link.models.filter((m) => library.get(m.id)?.kind === 'model')));
+    if (session.sky) session.loads.push(library.loadSky(session.sky.id));
     const picks = { ...(manifest.defaults[key] ?? {}), ...(fromLink ? link.textures : {}) };
     for (const [slot, slug] of Object.entries(picks) as [Slot, string][]) {
       const texture = findTexture(slug);
@@ -692,6 +735,7 @@ if (!gl) {
     resetView();
     daylight.setRoom(session.built);
     daylight.setTime(session.time);
+    showSky(session);
     // After setRoom, which empties the slot panel, so the room's models are listed again.
     hud.setRoom(key, session.current);
     select(null);
