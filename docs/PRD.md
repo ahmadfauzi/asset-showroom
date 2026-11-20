@@ -653,7 +653,8 @@ Each upload is processed once. Only the result is stored, never the zip. Uploads
 
 - `.exr` is read with `EXRLoader` and `.hdr` with `HDRLoader`, inside a Worker, so the page doesn't freeze. Checked in Node: the 8K example (8192 × 4096, PIZ compression) took 6.4 s and 634 MB of memory to decode.
 - It is scaled to 2048 × 1024 and stored as an `.exr` written with `EXRExporter` (half float).
-- The brightest spot is found at upload and stored with it, for the sun (16.9).
+- Sky-only HDRIs (the lower half is under 1% as bright as the upper half, leaving out the 5° just below the horizon) get their black lower half filled at upload. Just below the horizon each column takes the horizon colour above it, capped at 3 times the median so the sun can't light the ground from below. By 10° below, it blends into one even colour, and it darkens to half by the bottom. Added on 20 Nov 2026: with the sunset example, the default view showed black around the plinth.
+- The brightest spot is found at upload and stored with it, for the sun (16.9). In a filled HDRI the search only looks above the horizon.
 - The thumbnail is a 256 px tone-mapped picture.
 
 ### 16.6 Uploads tab
