@@ -144,9 +144,10 @@ export function createPlacements({
     },
     // Moves a model with the pointer over upward surfaces. Orbit is off until the release. A press that moves
     // less than 5 px is a click and selects it. A drag that moved it is one undo step. Only the pointer that
-    // pressed counts, so a second finger doesn't move the model or end the drag.
+    // pressed counts, so a second finger doesn't move the model or end the drag. Only the primary button drags
+    // (touch and pen send it too).
     startDrag(session: Session, index: number, event: PointerEvent) {
-      if (held) return;
+      if (held || event.button !== 0) return;
       held = true;
       const entry = session.placed[index];
       const start = entry.placement;

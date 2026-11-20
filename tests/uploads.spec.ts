@@ -505,6 +505,21 @@ test.describe('placed models', () => {
     expect(errors).toEqual([]);
   });
 
+  test('only the primary button drags a model', async () => {
+    const before = await hash(page);
+    const [first] = await placed();
+    const from = await screenOf(first.x, first.y + 0.25, first.z);
+    for (const button of ['right', 'middle'] as const) {
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down({ button });
+      await page.mouse.move(from.x + 100, from.y, { steps: 5 });
+      await page.mouse.up({ button });
+      expect((await placed())[0]).toEqual(first);
+      expect(await hash(page)).toBe(before);
+    }
+    expect(errors).toEqual([]);
+  });
+
   test('undo removes a placement and redo puts it back', async () => {
     const before = await models();
     await modelSwatch().click();
