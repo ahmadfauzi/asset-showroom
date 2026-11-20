@@ -179,7 +179,8 @@ zip('hdri-exr.zip', { 'Sky_HDR.exr': exr });
 zip('hdri-cut.zip', { 'Sky_HDR.exr': exr.slice(0, 400) });
 // Flat RGBE, top row first. HDRLoader reads data as run-length encoded only if it starts with the bytes 2, 2.
 // 1 is (255, 255, 255, 128), 0.05 is (204, 204, 204, 124) and 0.18 is about (184, 184, 184, 126).
-const RGBE = { 1: [255, 255, 255, 128], 0.05: [204, 204, 204, 124], 0.18: [184, 184, 184, 126], 0: [0, 0, 0, 0] };
+// 1000 is about (249, 249, 249, 138).
+const RGBE = { 1000: [249, 249, 249, 138], 1: [255, 255, 255, 128], 0.05: [204, 204, 204, 124], 0.18: [184, 184, 184, 126], 0: [0, 0, 0, 0] };
 const hdr = (valueAt) => {
   const data = new Uint8Array(W * H * 4);
   for (let top = 0; top < H; top++) for (let x = 0; x < W; x++) data.set(RGBE[valueAt(x, top)], (top * W + x) * 4);
@@ -187,6 +188,9 @@ const hdr = (valueAt) => {
 };
 const hdrHeader = (w, h) => bytes(`#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y ${h} +X ${w}\n`);
 zip('hdri-hdr.zip', { 'Sky.hdr': new Uint8Array([...hdrHeader(W, H), ...hdr(value)]) });
+// Sky-only, with one very bright pixel (1000) in the 8 rows just above the horizon, at x = 256 and row 125 from the
+// top. Its glow must not light the filled ground or pull the sun below the horizon.
+zip('hdri-glow.zip', { 'Glow.hdr': new Uint8Array([...hdrHeader(W, H), ...hdr((x, top) => (x === 256 && top === 125 ? 1000 : top < H / 2 ? 0.05 : 0))]) });
 // Not sky-only: a bright upper half (1) and a mid-grey lower half (0.18), which the Worker leaves alone.
 zip('hdri-full.zip', { 'Full.hdr': new Uint8Array([...hdrHeader(W, H), ...hdr((x, top) => (top < H / 2 ? 1 : 0.18))]) });
 zip('hdri-16k.zip', { 'Big.hdr': new Uint8Array([...hdrHeader(16384, 8192), 0, 0, 0, 0, 0, 0, 0, 0]) });

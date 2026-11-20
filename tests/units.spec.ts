@@ -266,7 +266,7 @@ test('uploads: the triangle limit', async ({ page }) => {
 
 test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page }) => {
   await openApp(page);
-  const names = ['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-full.zip', 'hdri-16k.zip', 'hdri-16k-spaced.zip', 'hdri-cut.zip'];
+  const names = ['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-full.zip', 'hdri-glow.zip', 'hdri-16k.zip', 'hdri-16k-spaced.zip', 'hdri-cut.zip'];
   const zips = Object.fromEntries(names.map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
   const r = await page.evaluate(async (zips) => {
     const p = await import('/src/uploads/process.ts');
@@ -276,7 +276,7 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
     const { EXRLoader } = await import(worker.match(/from ["']([^"']*EXRLoader[^"']*)["']/)![1]);
     const { FloatType } = await import(worker.match(/from ["']([^"']*deps\/three\.js[^"']*)["']/)![1]);
     const { renderer } = (window as any).showroom;
-    type Result = { kind?: string; sun?: unknown; size?: number[]; thumb?: number[]; error?: string; column?: Record<string, number>; lowerError?: number };
+    type Result = { kind?: string; sun?: unknown; size?: number[]; thumb?: number[]; error?: string; column?: Record<string, number>; lowerError?: number; lowerMax?: number };
     const results: Record<string, Result> = {};
     for (const [name, bytes] of Object.entries(zips)) {
       try {
@@ -287,10 +287,12 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
         const { data, width } = exr as { data: Float32Array; width: number };
         const at = (x: number, row: number) => (row * width + x) * 4;
         const luminance = (x: number, row: number) => 0.2126 * data[at(x, row)] + 0.7152 * data[at(x, row) + 1] + 0.0722 * data[at(x, row) + 2];
-        let lowerError = 0;
+        // hdri-full's lower half is RGBE (184, 184, 184, 126). three's HDRLoader reads that as 184 / 255 * 2^-2.
+        let lowerError = 0, lowerMax = 0;
         for (let i = 0; i < at(0, 128); i += 4) for (let c = 0; c < 3; c++) lowerError = Math.max(lowerError, Math.abs(data[i + c] - (184 / 255) * 0.25));
+        for (let row = 0; row < 128; row++) for (let x = 0; x < width; x++) lowerMax = Math.max(lowerMax, luminance(x, row));
         const column = { below: luminance(300, 127), middle: luminance(300, 64), bottom: luminance(300, 2) };
-        results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height], column, lowerError };
+        results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height], column, lowerError, lowerMax };
       } catch (error) {
         // The toast uploader.ts shows: an UploadError's message, otherwise "Couldn't read this zip.".
         results[name] = { error: error instanceof UploadError ? error.message : "Couldn't read this zip." };
@@ -315,6 +317,11 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
   // Not sky-only: the mid-grey lower half is kept, within half-float rounding.
   expect(r['hdri-full.zip'].error).toBeUndefined();
   expect(r['hdri-full.zip'].lowerError).toBeLessThan(0.002);
+  // A pixel of 1000 just above the horizon of a 0.05 sky: the fill stays at most 3 times the median horizon
+  // brightness (0.15, plus half-float rounding), and the sun is still found above the horizon.
+  expect(r['hdri-glow.zip'].error).toBeUndefined();
+  expect(r['hdri-glow.zip'].lowerMax).toBeLessThanOrEqual(0.15 * 1.001);
+  expect((r['hdri-glow.zip'].sun as { direction: number[] } | null)?.direction[1]).toBeGreaterThan(0);
   expect(r['hdri-16k.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
   // Double spaces, a tab and over 4 KB of comments, which HDRLoader still reads.
   expect(r['hdri-16k-spaced.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
@@ -325,18 +332,19 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
 test('uploads: fillBelowHorizon fills only sky-only images', async ({ page }) => {
   const r = await run(page, async () => {
     const { fillBelowHorizon } = await import('/src/uploads/horizon.ts');
-    // 8 x 4, bottom row first: rows 0 and 1 are below the horizon, rows 2 and 3 above it.
-    const image = (below: number[], above: (x: number) => number[]) => {
-      const data = new Float32Array(8 * 4 * 4);
-      for (let row = 0; row < 4; row++) for (let x = 0; x < 8; x++) data.set(row < 2 ? below : above(x), (row * 8 + x) * 4);
+    // `width` x 4, bottom row first: rows 0 and 1 are below the horizon, rows 2 and 3 above it.
+    const image = (below: number[], above: (x: number) => number[], width = 8) => {
+      const data = new Float32Array(width * 4 * 4);
+      for (let row = 0; row < 4; row++) for (let x = 0; x < width; x++) data.set(row < 2 ? below : above(x), (row * width + x) * 4);
       return data;
     };
-    const pixel = (data: Float32Array, x: number, row: number) => [...data.slice((row * 8 + x) * 4, (row * 8 + x) * 4 + 4)];
+    const pixel = (data: Float32Array, x: number, row: number, width = 8) => [...data.slice((row * width + x) * 4, (row * width + x) * 4 + 4)];
     const sky = image([0, 0, 0, 1], () => [0.2, 0.4, 0.6, 1]);
     const skyFilled = fillBelowHorizon(sky, 8, 4);
-    // One bright column at x = 0. The blur wraps, so columns 1 and 7 get the same amount of it.
-    const seam = image([0, 0, 0, 1], (x) => (x === 0 ? [33, 33, 33, 1] : [0, 0, 0, 1]));
-    fillBelowHorizon(seam, 8, 4);
+    // 64 wide, a 0.1 sky with a brighter column (0.25, under the cap) at x = 0. The 33 px blur wraps, so columns 1
+    // and 63 get the same share of it, and column 32 (out of reach) gets none.
+    const seam = image([0, 0, 0, 1], (x) => (x === 0 ? [0.25, 0.25, 0.25, 1] : [0.1, 0.1, 0.1, 1]), 64);
+    fillBelowHorizon(seam, 64, 4);
     const full = image([0.1, 0.1, 0.1, 1], () => [1, 1, 1, 1]);
     const before = [...full];
     const fullFilled = fillBelowHorizon(full, 8, 4);
@@ -349,7 +357,7 @@ test('uploads: fillBelowHorizon fills only sky-only images', async ({ page }) =>
       skyFilled,
       horizon: pixel(sky, 3, 1),
       bottom: pixel(sky, 3, 0),
-      seam: [pixel(seam, 1, 1)[0], pixel(seam, 7, 1)[0]],
+      seam: [pixel(seam, 1, 1, 64)[0], pixel(seam, 63, 1, 64)[0], pixel(seam, 32, 1, 64)[0]],
       fullFilled,
       fullSame: [...full].every((v, i) => v === before[i]),
     };
@@ -357,8 +365,9 @@ test('uploads: fillBelowHorizon fills only sky-only images', async ({ page }) =>
   expect(r.skyFilled).toBe(true);
   [0.2, 0.4, 0.6, 1].forEach((v, i) => expect(r.horizon[i]).toBeCloseTo(v, 5));
   [0.1, 0.2, 0.3, 1].forEach((v, i) => expect(r.bottom[i]).toBeCloseTo(v, 5));
-  expect(r.seam[0]).toBeGreaterThan(0);
-  expect(r.seam[0]).toBeCloseTo(r.seam[1], 5);
+  expect(r.seam[0]).toBeCloseTo(0.1 + 0.15 / 33, 5);
+  expect(r.seam[1]).toBeCloseTo(r.seam[0], 5);
+  expect(r.seam[2]).toBeCloseTo(0.1, 5);
   expect(r.fullFilled).toBe(false);
   expect(r.fullSame).toBe(true);
   // A little sky just below the middle row doesn't stop the fill.

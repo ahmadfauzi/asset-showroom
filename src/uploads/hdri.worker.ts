@@ -78,10 +78,11 @@ function shrink(src: ArrayLike<number>, w: number, h: number, W: number, H: numb
 }
 
 // The brightest 32 x 32 block, tried every 16 px so a small sun is never split between blocks. Uses three's
-// equirect mapping: u along the width, v = 0 at the bottom row. An image under 32 px has no sun.
-function findSun(image: Float32Array, W: number, H: number): SkySun {
+// equirect mapping: u along the width, v = 0 at the bottom row. An image under 32 px has no sun. Blocks start at
+// `fromRow` or above.
+function findSun(image: Float32Array, W: number, H: number, fromRow: number): SkySun {
   let best = -1, sum = [0, 0, 0], centre = [0, 0];
-  for (let y0 = 0; y0 + BLOCK <= H; y0 += STEP)
+  for (let y0 = fromRow; y0 + BLOCK <= H; y0 += STEP)
     for (let x0 = 0; x0 + BLOCK <= W; x0 += STEP) {
       const s = [0, 0, 0];
       for (let y = y0; y < y0 + BLOCK; y++)
@@ -135,10 +136,10 @@ self.onmessage = async ({ data: { name, bytes } }: MessageEvent<{ name: string; 
     const [W, H] = [Math.max(1, Math.round(decoded.width * s)), Math.max(1, Math.round(decoded.height * s))];
     // HDRLoader gives the top row first, EXRLoader the bottom row.
     const image = shrink(decoded.data, decoded.width, decoded.height, W, H, hdr, toNumber);
-    // Before the sun search. The filled rows are a dimmed blur of the rows just above the horizon, so the sun is
-    // still found above it.
-    fillBelowHorizon(image, W, H);
-    const sun = findSun(image, W, H);
+    // Before the sun search. If it filled, the sun is only looked for above the horizon: the fill can be a little
+    // brighter than the sky beside a bright spot, so a block across the horizon could otherwise win.
+    const filled = fillBelowHorizon(image, W, H);
+    const sun = findSun(image, W, H, filled ? H >> 1 : 0);
     const exr = await new EXRExporter().parse(new DataTexture(image, W, H, RGBAFormat, FloatType), { type: HalfFloatType, compression: ZIP_COMPRESSION });
     postMessage({ exr: new Blob([exr as BlobPart], { type: 'image/x-exr' }), thumb: await thumbnail(image, W, H), sun });
   } catch (error) {

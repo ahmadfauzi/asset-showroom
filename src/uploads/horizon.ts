@@ -5,8 +5,8 @@ const BAND = 8; // rows above the horizon that give its colour
 const BLUR = 33; // columns, wrapping around the u = 0/1 seam
 
 // `data` is RGBA, bottom row first, as the Worker keeps it. If the lower half is under 1% as bright as the upper
-// half, every row below the horizon becomes the blurred horizon colour, from 1 times at the horizon down to 0.5
-// times at the bottom row. Changes `data` in place and returns true if it filled.
+// half, every row below the horizon becomes the blurred horizon colour (capped, see below), from 1 times at the
+// horizon down to 0.5 times at the bottom row. Changes `data` in place and returns true if it filled.
 export function fillBelowHorizon(data: Float32Array, width: number, height: number): boolean {
   const half = height >> 1;
   // The lower half is measured without the rows within 5 degrees of the horizon. Checked: the sunset HDRI's sky
@@ -24,6 +24,12 @@ export function fillBelowHorizon(data: Float32Array, width: number, height: numb
   const horizon = new Float32Array(width * 3);
   for (let y = half; y < half + band; y++)
     for (let x = 0; x < width; x++) for (let c = 0; c < 3; c++) horizon[x * 3 + c] += data[(y * width + x) * 4 + c] / band;
+  // A sun or glow in the band would light the ground from below. Each column is capped at 3 times the median
+  // column brightness, keeping its hue, so no filled pixel is brighter than that.
+  const bright = Array.from({ length: width }, (_, x) => luminance(horizon, x * 3));
+  const cap = 3 * [...bright].sort((a, b) => a - b)[width >> 1];
+  for (let x = 0; x < width; x++)
+    if (bright[x] > cap) for (let c = 0; c < 3; c++) horizon[x * 3 + c] *= cap / bright[x];
   const blurred = new Float32Array(width * 3);
   const reach = BLUR >> 1;
   for (let x = 0; x < width; x++)
