@@ -178,8 +178,10 @@ export function createHud({
       const { offsetLeft, offsetWidth } = tabButtons[tab];
       if (offsetLeft < tabs.scrollLeft || offsetLeft + offsetWidth > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = offsetLeft - 8;
     },
-    setTexture(slot: Slot, texture: AnyTexture) {
-      applied[slot] = texture;
+    // No texture means the slot has none again.
+    setTexture(slot: Slot, texture?: AnyTexture) {
+      if (texture) applied[slot] = texture;
+      else delete applied[slot];
       render();
     },
     // Shows the room's surfaces and marks its button. `roomApplied` is the room's own record, kept by the caller.

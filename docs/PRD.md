@@ -674,7 +674,7 @@ Each upload is processed once. Only the result is stored, never the zip. Uploads
 - The Uploads tab is never dimmed when a surface is selected, because uploaded textures fit every surface.
 - Sky swatches can only be used in the Garden. In other rooms they are greyed out and say "Skies work in the Garden."
 - Empty tab: "Upload a .zip with a texture, a model or an HDRI. It stays in this browser."
-- Delete asks first. If the upload is in use, it says where, for example "Used in 2 rooms. Delete it?". After a delete, surfaces that used it go back to the room's default, placed copies are removed, the Garden goes back to the drawn sky, and undo steps skip it. The delete itself can't be undone.
+- Delete asks first. If the upload is in use, it says where, for example "Used in 2 rooms. Delete it?". After a delete, surfaces that used it go back to the room's default (or to no texture, if the set has no default for that surface), placed copies are removed, the Garden goes back to the drawn sky, and undo steps skip it. The delete itself can't be undone.
 
 ### 16.7 Uploaded textures
 

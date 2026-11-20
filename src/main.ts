@@ -31,6 +31,7 @@ import { createHud, DRAG_TYPE } from './hud';
 import { createPlacements, fallback, inside, surfaceAt, type Placed } from './placement';
 import { accepts, fits, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 import { buildRoom, type BuiltRoom } from './rooms/index';
+import { untextured } from './rooms/parts';
 import { createSnow } from './snow';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
@@ -301,11 +302,13 @@ if (!gl) {
     const { key } = active.built;
     if (record(active.history, snapshot(active), (state) => toHash(key, state))) save();
   };
-  // ponytail: a slot can't go back to having no texture. A full manifest gives every slot a default.
+  // A slot the state has no texture for goes back to none, as a slot with no default in the set starts.
   const restore = (state: RoomState) => {
-    for (const [slot, slug] of Object.entries(state.textures) as [Slot, string][]) {
-      const texture = findTexture(slug);
-      if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
+    for (const slot of ROOMS[active.built.key].slots as Slot[]) {
+      const slug = state.textures[slot];
+      const texture = slug ? findTexture(slug) : undefined;
+      if (!slug && (active.latest[slot] || active.current[slot])) clearTexture(active, slot);
+      else if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
     }
     void placements.sync(active, state.models);
     // The selected model stays selected while it is still in the list.
@@ -446,13 +449,14 @@ if (!gl) {
         sky?.id === id
       );
     });
-  // Takes a deleted upload out of a room: surfaces go back to the room's defaults, its placements go and the sky goes
-  // back to the drawn one. It isn't an undo step (PRD 16.6). Settles once the defaults show.
+  // Takes a deleted upload out of a room: surfaces go back to the room's defaults (or to no texture if the set has
+  // none), its placements go and the sky goes back to the drawn one. It isn't an undo step (PRD 16.6). Settles once
+  // the defaults show.
   const forget = (session: RoomSession, id: string) => {
     const defaults = manifest.defaults[session.built.key] ?? {};
-    const resets = (Object.entries(defaults) as [Slot, string][])
-      .filter(([slot]) => session.latest[slot] === id || session.current[slot]?.slug === id)
-      .map(([slot, slug]) => applyTexture(session, slot, findTexture(slug)!));
+    const resets = (ROOMS[session.built.key].slots as Slot[])
+      .filter((slot) => session.latest[slot] === id || session.current[slot]?.slug === id)
+      .map((slot) => (defaults[slot] ? applyTexture(session, slot, findTexture(defaults[slot])!) : clearTexture(session, slot)));
     const models = session.placed.filter((p) => p.placement.id !== id).map((p) => p.placement);
     const removed = models.length < session.placed.length;
     void placements.sync(session, models);
@@ -739,6 +743,16 @@ if (!gl) {
       };
       requestAnimationFrame(step);
     });
+
+  // Takes a slot back to no texture, as roomKit made it. A texture still loading for it is dropped when it lands.
+  const clearTexture = (session: RoomSession, slot: Slot) => {
+    const material = session.built.materials[slot]!;
+    material.setValues({ map: null, normalMap: null, aoMap: null, roughnessMap: null, metalnessMap: null, ...untextured(slot) });
+    material.needsUpdate = true;
+    delete session.latest[slot];
+    delete session.current[slot];
+    if (session === active) hud.setTexture(slot);
+  };
 
   // The last texture picked for a slot wins, even if an earlier one finishes loading later. A texture that
   // finishes after a room switch still lands on the room it was picked in.

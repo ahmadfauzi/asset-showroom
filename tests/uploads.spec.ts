@@ -1035,6 +1035,61 @@ test('deleting a placed model or the garden sky removes them', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+test('a surface with no default goes back to no texture after an undo or a delete', async ({ page }) => {
+  // The free set has no default for the Garden ground, so the fixture manifest is served without that one.
+  let stripped = false;
+  await page.route('**/src/textures/fixture.json*', async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    const without = body.replaceAll('"ground":"grass-fixture",', '');
+    stripped ||= without !== body;
+    await route.fulfill({ response, body: without });
+  });
+  // A texture upload, put straight into the store.
+  await page.goto('/robots.txt');
+  await page.evaluate(async () => {
+    const s = await import('/src/uploads/store.ts');
+    const png = (color: string) => {
+      const canvas = new OffscreenCanvas(8, 8);
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 8, 8);
+      return canvas.convertToBlob();
+    };
+    const color = await png('#c86432');
+    const files = { color, normal: await png('#8080ff'), orm: await png('#ff8000') };
+    await s.putUpload({ id: 'u-0000000e', kind: 'texture', name: 'Tile', created: 1, bytes: 1, thumb: color, sizeCm: [100, 100], files });
+  });
+  const errors = await open(page, '#v=2&room=garden');
+  expect(stripped).toBe(true);
+  const ground = () =>
+    page.evaluate(() => {
+      const material = (window as any).showroom.materials().ground;
+      return { map: material.map?.name ?? null, color: material.color.getHexString(), roughness: material.roughness, metalness: material.metalness };
+    });
+  const bare = await ground();
+  expect(bare).toEqual({ map: null, color: expect.not.stringMatching('ffffff'), roughness: 0.8, metalness: 0 });
+  const textured = { map: 'u-0000000e', color: 'ffffff', roughness: 1, metalness: 1 };
+
+  await slot(page, 'Ground').click();
+  await uploadsTab(page).click();
+  await swatches(page).locator('.swatch').click();
+  await expect.poll(ground).toEqual(textured);
+  expect(await hash(page)).toContain('ground=u-0000000e');
+  await page.keyboard.press('Control+z');
+  await expect.poll(ground).toEqual(bare);
+  expect(await hash(page)).not.toContain('ground=');
+
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(ground).toEqual(textured);
+  const asked = accept(page);
+  await swatches(page).locator('.delete').click();
+  expect(await asked).toBe('Used in 1 room. Delete it?');
+  await expect.poll(ground).toEqual(bare);
+  expect(await hash(page)).not.toContain('ground=');
+  expect(errors).toEqual([]);
+});
+
 // Puts a bundled texture on the floor of the room that shows. The Floor stays selected.
 const floorTo = async (page: Page, tab: string, name: string, slug: string) => {
   await page.keyboard.press('Escape'); // clicking a selected slot clears it
