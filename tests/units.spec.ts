@@ -292,6 +292,12 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
         for (let i = 0; i < at(0, 128); i += 4) for (let c = 0; c < 3; c++) lowerError = Math.max(lowerError, Math.abs(data[i + c] - (184 / 255) * 0.25));
         for (let row = 0; row < 128; row++) for (let x = 0; x < width; x++) lowerMax = Math.max(lowerMax, luminance(x, row));
         const column = { below: luminance(300, 127), middle: luminance(300, 64), bottom: luminance(300, 2) };
+        // How much the columns differ in one row: just below the horizon, and 15 degrees below it (256 / 12 rows).
+        const spread = (row: number) => {
+          const all = Array.from({ length: width }, (_, x) => luminance(x, row));
+          return Math.max(...all) - Math.min(...all);
+        };
+        Object.assign(column, { spreadBelow: spread(127), spread15: spread(127 - Math.round(256 / 12)) });
         results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height], column, lowerError, lowerMax };
       } catch (error) {
         // The toast uploader.ts shows: an UploadError's message, otherwise "Couldn't read this zip.".
@@ -322,6 +328,11 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
   expect(r['hdri-glow.zip'].error).toBeUndefined();
   expect(r['hdri-glow.zip'].lowerMax).toBeLessThanOrEqual(0.15 * 1.001);
   expect((r['hdri-glow.zip'].sun as { direction: number[] } | null)?.direction[1]).toBeGreaterThan(0);
+  // The glow under the bright pixel shows just below the horizon (about 0.053 against 0.05), but 15 degrees
+  // below, every column has the same colour, so there are no vertical bars.
+  const { spreadBelow, spread15 } = r['hdri-glow.zip'].column!;
+  expect(spreadBelow).toBeGreaterThan(0.001);
+  expect(spread15).toBeLessThan(0.0001);
   expect(r['hdri-16k.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
   // Double spaces, a tab and over 4 KB of comments, which HDRLoader still reads.
   expect(r['hdri-16k-spaced.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
