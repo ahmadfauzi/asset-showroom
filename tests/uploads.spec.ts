@@ -732,6 +732,13 @@ test.describe('an HDRI sky', () => {
     expect((await background()).turn.map((r) => r.toFixed(3))).toEqual([(Math.PI / 2).toFixed(3), (Math.PI / 2).toFixed(3)]);
     await page.keyboard.press('Control+z');
     await expect.poll(() => hash(page)).toContain('sr=0');
+    // The keyboard turns it too, 5 degrees a step.
+    const slider = page.getByRole('slider', { name: 'Turn sky' });
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await expect.poll(() => hash(page)).toContain('sr=5');
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => hash(page)).toContain('sr=0');
     expect(errors).toEqual([]);
   });
 
@@ -776,7 +783,8 @@ test.describe('an HDRI sky', () => {
   });
 
   test('time of day goes back to the drawn sky', async () => {
-    await page.getByRole('button', { name: 'Time of day' }).click();
+    await page.getByRole('button', { name: 'Time of day' }).focus();
+    await page.keyboard.press('Enter');
     await expect.poll(() => hash(page)).not.toContain('sky=');
     for (const preset of await presets().all()) await expect(preset).toBeEnabled();
     await expect(page.getByRole('slider', { name: 'Time of day' })).toBeVisible();
