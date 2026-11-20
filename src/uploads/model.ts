@@ -143,6 +143,8 @@ async function convertMaterials(model: Object3D, files: Record<string, Uint8Arra
     const prefix = groups.size === 1 ? prefixes[0] : prefixes.find((p) => flat(o.name).startsWith(p) || flat(meshName).startsWith(p));
     const maps = prefix === undefined ? {} : groups.get(prefix)!;
     if (maps.color) material.map = maps.color;
+    // An FBX's DiffuseColor would tint or darken the zip's colour map. A glTF colour factor is meant to tint, so it stays.
+    if (maps.color && material !== o) material.color.set(0xffffff);
     if (maps.normal) material.normalMap = maps.normal;
     if (maps.ao) material.aoMap = maps.ao;
     const roughness = maps.roughness ?? maps.gloss;

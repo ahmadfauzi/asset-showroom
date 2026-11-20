@@ -217,7 +217,7 @@ test('uploads: models get metres, a colour map and a sane size', async ({ page }
     const p = await import('/src/uploads/process.ts');
     const m = await import('/src/uploads/model.ts');
     const { renderer } = (window as any).showroom;
-    const results: Record<string, { kind: string; height: number; base: number; map: boolean; notices: string[]; thumb: number[] }> = {};
+    const results: Record<string, { kind: string; height: number; base: number; map: boolean; color: string; notices: string[]; thumb: number[] }> = {};
     for (const [name, bytes] of Object.entries(zips)) {
       const notices: string[] = [];
       const upload = await p.processZip(new File([new Uint8Array(bytes)], name), renderer, () => {}, (message) => notices.push(message));
@@ -227,15 +227,17 @@ test('uploads: models get metres, a colour map and a sane size', async ({ page }
       object.updateMatrixWorld(true);
       let box: any = null;
       let map = false;
+      let color = '';
       object.traverse((o: any) => {
         if (!o.isMesh) return;
         o.geometry.computeBoundingBox();
         const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
         box = box ? box.union(b) : b;
         map ||= !!o.material.map;
+        color = o.material.color.getHexString();
       });
       const thumb = await createImageBitmap(upload.thumb);
-      results[name] = { kind: upload.kind, height: box.max.y - box.min.y, base: box.min.y, map, notices, thumb: [thumb.width, thumb.height] };
+      results[name] = { kind: upload.kind, height: box.max.y - box.min.y, base: box.min.y, map, color, notices, thumb: [thumb.width, thumb.height] };
     }
     return results;
   }, zips);
@@ -244,6 +246,8 @@ test('uploads: models get metres, a colour map and a sane size', async ({ page }
   const strided = r['model-interleaved.zip'];
   expect(Math.abs(fbx.height - 0.3)).toBeLessThanOrEqual(0.01);
   expect(fbx.map).toBe(true);
+  // The FBX's DiffuseColor (0.5, 0.25, 0.25) doesn't tint the zip's colour map.
+  expect(fbx.color).toBe('ffffff');
   expect(Math.abs(glb.height - 0.5)).toBeLessThanOrEqual(0.01);
   expect(Math.abs(strided.height - 0.5)).toBeLessThanOrEqual(0.01);
   expect(Math.abs(huge.height - 1)).toBeLessThanOrEqual(0.01);

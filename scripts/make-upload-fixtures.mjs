@@ -141,7 +141,7 @@ Objects:  {
 		Version: 102
 		ShadingModel: "phong"
 		Properties70:  {
-			P: "DiffuseColor", "Color", "", "A",1,1,1
+			P: "DiffuseColor", "Color", "", "A",0.5,0.25,0.25
 		}
 	}
 }
