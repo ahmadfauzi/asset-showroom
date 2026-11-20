@@ -1,5 +1,7 @@
 import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs';
-import { defineConfig, loadEnv } from 'vite';
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
+import { defineConfig, loadEnv, searchForWorkspaceRoot } from 'vite';
 
 // Only the active texture set is served and copied into dist/. See docs/PRD.md section 7.4.
 // "fixture" is a set of plain-colour textures for the Playwright tests.
@@ -13,7 +15,11 @@ export default defineConfig(({ mode }) => {
   // The built models. The build tests point this at an empty folder to check the missing-file error.
   const models = process.env.MODELS_DIR || 'models-built';
 
+  // In a git worktree the dependencies resolve from the parent checkout's node_modules, which Vite refuses without this.
+  const nodeModules = dirname(dirname(dirname(createRequire(import.meta.url).resolve('@fontsource-variable/inter/package.json'))));
+
   return {
+    server: { fs: { allow: [searchForWorkspaceRoot(process.cwd()), nodeModules] } },
     resolve: { alias: { '@manifest': `/src/textures/${set}.json` } },
     plugins: [
       {

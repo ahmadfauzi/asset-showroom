@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { expect, test, type Page } from '@playwright/test';
 
 // Upload tests from PRD section 16, against the fixture set. Each test has its own browser context, so its own
@@ -8,8 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 const open = async (page: Page, hash = '') => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  // In a git worktree, Vite refuses the font from the parent node_modules with a 403.
-  page.on('console', (message) => message.type() === 'error' && !message.location().url.includes('@fontsource') && errors.push(message.text()));
+  page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
   await page.goto(`/${hash}`);
   await expect(page.locator('#loader')).toHaveClass(/done/);
   return errors;
@@ -179,9 +177,6 @@ test('the empty Uploads tab says what to upload', async ({ page }) => {
 });
 
 test('at 375 px the toolbar fits while uploading', async ({ page }) => {
-  // A worktree can't serve the font from the parent node_modules, so serve it here: the fit depends on it.
-  await page.route('**/inter-latin-wght-normal.woff2', (route) =>
-    route.fulfill({ path: createRequire(import.meta.url).resolve('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2'), contentType: 'font/woff2' }));
   await page.setViewportSize({ width: 375, height: 812 });
   await open(page);
   await page.evaluate(() => document.fonts.ready);
