@@ -265,29 +265,34 @@ if (!gl) {
     models: session.placed.map((p) => p.placement),
     sky: session.sky,
   });
+  // A saved state without the uploads deleted since (PRD 16.6): their surfaces take the room's default.
+  const clean = (saved: RoomState): RoomState => {
+    const ids = library.ids();
+    const defaults = manifest.defaults[active.built.key] ?? {};
+    const textures = { ...saved.textures };
+    for (const [slot, slug] of Object.entries(textures) as [Slot, string][]) if (!findTexture(slug)) textures[slot] = defaults[slot];
+    return {
+      ...saved,
+      textures,
+      models: saved.models.filter((m) => ids.has(m.id)),
+      sky: saved.sky && ids.has(saved.sky.id) ? saved.sky : null,
+    };
+  };
   const save = () => {
-    window.history.replaceState(null, '', toHash(active.built.key, active.history.committed));
-    toolbar.setHistory(active.history.past.length > 0, active.history.future.length > 0);
+    const { key } = active.built;
+    const { past, committed, future } = active.history;
+    const now = toHash(key, committed);
+    window.history.replaceState(null, '', now);
+    // Undo and redo are on only while a step would change the room (see step).
+    const changes = (state: RoomState) => toHash(key, clean(state)) !== now;
+    toolbar.setHistory(past.some(changes), future.some(changes));
   };
   const commit = () => {
     const { key } = active.built;
     if (record(active.history, snapshot(active), (state) => toHash(key, state))) save();
   };
   // ponytail: a slot can't go back to having no texture. A full manifest gives every slot a default.
-  const restore = (saved: RoomState | undefined) => {
-    if (!saved) return;
-    // Undo and redo skip uploads deleted since (PRD 16.6): their surfaces take the room's default.
-    const ids = library.ids();
-    const defaults = manifest.defaults[active.built.key] ?? {};
-    const textures = { ...saved.textures };
-    for (const [slot, slug] of Object.entries(textures) as [Slot, string][]) if (!findTexture(slug)) textures[slot] = defaults[slot];
-    const state: RoomState = {
-      ...saved,
-      textures,
-      models: saved.models.filter((m) => ids.has(m.id)),
-      sky: saved.sky && ids.has(saved.sky.id) ? saved.sky : null,
-    };
-    active.history.committed = state;
+  const restore = (state: RoomState) => {
     for (const [slot, slug] of Object.entries(state.textures) as [Slot, string][]) {
       const texture = findTexture(slug);
       if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
@@ -347,8 +352,19 @@ if (!gl) {
     commit();
     document.querySelector<HTMLInputElement>('.time input')!.focus();
   });
-  const undo = () => restore(stepBack(active.history));
-  const redo = () => restore(stepForward(active.history));
+  // Undo and redo. A step that changes nothing once deleted uploads are taken out is skipped, so each press
+  // changes the room (PRD 16.6). The cleaned states replace the saved ones.
+  const step = (move: (history: History<RoomState>) => RoomState | undefined) => {
+    const { key } = active.built;
+    const now = toHash(key, active.history.committed);
+    for (let saved = move(active.history); saved; saved = move(active.history)) {
+      const state = (active.history.committed = clean(saved));
+      if (toHash(key, state) !== now) return restore(state);
+    }
+    save();
+  };
+  const undo = () => step(stepBack);
+  const redo = () => step(stepForward);
 
   // Saves the view without the HUD or the selection outline, at the canvas size (PRD 6.9).
   const savePicture = () => {

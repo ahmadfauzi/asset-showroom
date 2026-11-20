@@ -977,19 +977,30 @@ test('deleting a placed model or the garden sky removes them', async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+// Puts a bundled texture on the floor of the room that shows. The Floor stays selected.
+const floorTo = async (page: Page, tab: string, name: string, slug: string) => {
+  await page.keyboard.press('Escape'); // clicking a selected slot clears it
+  await slot(page, 'Floor').click();
+  await page.locator('#tabs button', { hasText: tab }).click();
+  await page.getByRole('button', { name }).click();
+  await expect.poll(() => hash(page)).toContain(`floor=${slug}`);
+};
+const marbleFloor = (page: Page) => floorTo(page, 'Stone and tiles', 'Marble Fixture', 'marble-fixture');
+
 test('undo in another room after a delete skips the upload', async ({ page }) => {
   waitsForUpload();
   const errors = await open(page);
   await upload(page, 'texture-metal.zip');
   await goTo(page, 'Bedroom', 'bedroom');
+  const start = await hash(page); // the default oak floor at 12:00
+  await marbleFloor(page);
+  const marble = await hash(page);
+  await uploadsTab(page).click();
   await expect(swatches(page)).toHaveCount(1, done);
-  const start = await hash(page);
-  await slot(page, 'Floor').click();
   await swatches(page).locator('.swatch').click();
   await expect.poll(() => hash(page)).toContain('floor=u-');
-  const picked = await hash(page);
   await page.keyboard.press(']');
-  await expect.poll(() => hash(page)).not.toBe(picked);
+  await expect.poll(() => hash(page)).toContain('t=13');
 
   await goTo(page, 'Living room', 'living');
   const asked = accept(page);
@@ -997,14 +1008,54 @@ test('undo in another room after a delete skips the upload', async ({ page }) =>
   expect(await asked).toBe('Used in 1 room. Delete it?');
   await expect(swatches(page)).toHaveCount(0);
 
+  // Each undo changes the room: the upload's step at 12:00 with the default floor, then marble, then the start.
   await goTo(page, 'Bedroom', 'bedroom');
-  expect(await hash(page)).not.toContain('u-');
+  expect(await hash(page)).toBe(start.replace('t=12', 't=13'));
   await page.keyboard.press('Control+z');
-  await expect.poll(() => hash(page)).toContain('t=12');
-  expect(await hash(page)).not.toContain('u-');
+  await expect.poll(() => hash(page)).toBe(start);
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).toBe(marble);
   await page.keyboard.press('Control+z');
   await expect.poll(() => hash(page)).toBe(start);
   await expect(page.locator('#toolbar [data-action="undo"]')).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test('undo after deleting an upload in its own room changes the room', async ({ page }) => {
+  waitsForUpload();
+  const errors = await open(page);
+  const undoButton = page.locator('#toolbar [data-action="undo"]');
+  const redoButton = page.locator('#toolbar [data-action="redo"]');
+  await upload(page, 'texture-metal.zip');
+  const start = await hash(page);
+  // Marble, then the default oak again, then the upload.
+  await marbleFloor(page);
+  const marble = await hash(page);
+  await floorTo(page, 'Wood', 'Oak Fixture', 'oak-fixture');
+  await uploadsTab(page).click();
+  await expect(swatches(page)).toHaveCount(1, done);
+  await swatches(page).locator('.swatch').click();
+  await expect.poll(() => hash(page)).toContain('floor=u-');
+
+  const asked = accept(page);
+  await swatches(page).locator('.delete').click();
+  expect(await asked).toBe('Used in 1 room. Delete it?');
+  await expect.poll(() => hash(page)).toContain('floor=oak-fixture');
+  await expect(undoButton).toBeEnabled();
+
+  // The step before the upload is the oak floor the room shows now, so one undo goes past it to marble.
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).toBe(marble);
+  await expect.poll(() => floorMap(page)).toBe('marble-fixture');
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => hash(page)).toBe(start);
+  await expect(undoButton).toBeDisabled();
+  // Redo goes forward to marble, then to oak, and then has nothing left that changes the room.
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(() => hash(page)).toBe(marble);
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(() => hash(page)).toBe(start);
+  await expect(redoButton).toBeDisabled();
   expect(errors).toEqual([]);
 });
 
