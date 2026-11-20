@@ -52,7 +52,7 @@ const largest = (list: ZipEntry[]) => list.reduce((a, b) => (b.size > a.size ? b
 
 // The order of the rules is PRD 16.4.
 export function detectKind(entries: ZipEntry[]): { kind: Kind; main: string } {
-  const files = entries.filter((e) => !e.name.endsWith('/') && !e.name.toLowerCase().includes('preview'));
+  const files = entries.filter((e) => !e.name.endsWith('/') && !baseName(e.name).toLowerCase().includes('preview'));
   const withExt = (...exts: string[]) => files.filter((e) => exts.includes(ext(e.name)));
 
   const models = withExt('glb', 'gltf', 'fbx');

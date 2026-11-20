@@ -612,7 +612,7 @@ The zip's file list is read before anything is unpacked, so the size checks and 
 
 ### 16.4 Working out the kind
 
-The app checks the file names in the zip in this order. Files with "preview" in the name are ignored.
+The app checks the file names in the zip in this order. Files with "preview" in the file name are ignored. A folder name doesn't count, here or for the `DX` test in 16.5.
 
 To find which map an image is, its file name (without folders) is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Then:
 

@@ -1,4 +1,4 @@
-import { MESSAGES, mapRole, type MapRole } from './detect';
+import { baseName, MESSAGES, mapRole, type MapRole } from './detect';
 import { UploadError, type TextureFiles } from './types';
 
 const COLOR_MAX = 2048;
@@ -52,8 +52,9 @@ export async function processTexture(files: Record<string, Uint8Array>): Promise
   if (normalMap) {
     const n = fit(normalMap.width, normalMap.height, NORMAL_MAX);
     const { canvas, ctx } = draw(normalMap, n.width, n.height);
-    // three.js expects green up. Poliigon marks DirectX normals with "DX", same rule as scripts/build-textures.mjs.
-    if (/DX/.test(picked.get('normal')!)) {
+    // three.js expects green up. Poliigon marks DirectX normals with "DX" in the file name (not
+    // the folder), the same rule as scripts/build-textures.mjs.
+    if (/DX/.test(baseName(picked.get('normal')!))) {
       const img = ctx.getImageData(0, 0, n.width, n.height);
       for (let i = 1; i < img.data.length; i += 4) img.data[i] = 255 - img.data[i];
       ctx.putImageData(img, 0, 0);

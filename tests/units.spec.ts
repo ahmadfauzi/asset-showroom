@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import sharp from 'sharp';
+import { zipSync } from 'three/examples/jsm/libs/fflate.module.js';
 
 // Runs a function in the browser after loading a static file on the same origin.
 // The app does not load, so these tests only check plain modules.
@@ -183,6 +185,22 @@ test('uploads: texture processing packs ORM and flips DX normals', async ({ page
   expect(near(r.metal.color, [200, 100, 50])).toBe(true);
   expect(near(r.gloss.orm, [255, 63, 0])).toBe(true); // roughness = 255 - 192
   expect(r.metal.thumb).toBe(64); // never scaled up past the source
+});
+
+test('uploads: folder names called Preview or DX change nothing', async ({ page }) => {
+  const png = (background: string) => sharp({ create: { width: 8, height: 8, channels: 3, background } }).png().toBuffer().then((b) => new Uint8Array(b));
+  const data = zipSync({ 'Preview/Tile_BaseColor.png': await png('#c86432'), 'Preview/DX/Tile_Normal.png': await png('#80c8ff') });
+  const r = await run(page, async () => {}).then(() => page.evaluate(async (bytes) => {
+    const p = await import('/src/uploads/process.ts');
+    const upload = await p.processZip(new File([new Uint8Array(bytes)], 'Tile.zip'), null as never, () => {}, () => {});
+    const bitmap = await createImageBitmap((upload.files as { normal: Blob }).normal);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0);
+    return { kind: upload.kind, normal: [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)] };
+  }, [...data]));
+  expect(r.kind).toBe('texture');
+  expect(Math.abs(r.normal[1] - 200)).toBeLessThanOrEqual(2); // not flipped to 55
 });
 
 // The model tests need the app's renderer, which the app puts on window.showroom with the fixture set.

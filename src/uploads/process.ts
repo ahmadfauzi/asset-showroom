@@ -1,5 +1,5 @@
 import type { WebGLRenderer } from 'three';
-import { checkSizes, detectKind, LIMITS, mapRole, MESSAGES } from './detect';
+import { baseName, checkSizes, detectKind, LIMITS, mapRole, MESSAGES } from './detect';
 import { processHdri } from './hdri';
 import { processModel } from './model';
 import { newId } from './store';
@@ -33,7 +33,7 @@ export async function processZip(
     const wanted = (name: string) => kind !== 'hdri' && (kind === 'model' ? /\.(bin|jpe?g|png|webp|ktx2)$/i.test(name) : mapRole(name));
     const names = entries
       .map((entry) => entry.name)
-      .filter((name) => name === main || (!name.endsWith('/') && !name.toLowerCase().includes('preview') && wanted(name)));
+      .filter((name) => name === main || (!name.endsWith('/') && !baseName(name).toLowerCase().includes('preview') && wanted(name)));
     const unpacked = await readZip(data, names);
     onProgress(0.3);
     let files: UploadFiles, thumb: Blob, sun: SkySun = null;
