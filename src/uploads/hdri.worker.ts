@@ -6,24 +6,32 @@ import { encodeImage, fit } from './texture';
 import { LIMITS, type SkySun } from './types';
 
 // Decodes an uploaded .exr or .hdr off the main thread (PRD 16.5). Gets { name, bytes }. Posts
-// { exr, thumb, sun }, or { error } with 'size', 'memory' or another error's message.
+// { exr, thumb, sun }, or { error } with 'size', 'memory' or, for a file it can't read, the error's message.
 
 const MAX = { width: 2048, height: 1024 };
 const BLOCK = 32;
 const STEP = BLOCK / 2;
 const THUMB = 256;
 
-// Width and height from the header, so an oversized file is never decoded.
-function headerSize(name: string, bytes: Uint8Array): [number, number] {
+// Width and height from the header, so an oversized file is never decoded. null if they can't be found, and
+// then the file is refused rather than decoded.
+function headerSize(name: string, bytes: Uint8Array): [number, number] | null {
   if (/\.hdr$/i.test(name)) {
-    const text = new TextDecoder('latin1').decode(bytes.subarray(0, 4096));
-    const m = text.match(/^([-+])([XY]) (\d+) ([-+])([XY]) (\d+)$/m);
-    if (!m) return [0, 0]; // HDRLoader reports the bad file
-    return m[2] === 'X' ? [+m[3], +m[6]] : [+m[6], +m[3]];
+    // Read the way HDRLoader reads it: lines that don't start with '#', until it has the format and the size.
+    // The size is only looked for in the first 64 KB.
+    let size: [number, number] | null = null, format = false;
+    for (const line of new TextDecoder('latin1').decode(bytes.subarray(0, 65536)).split('\n')) {
+      if (line.startsWith('#')) continue;
+      const m = line.match(/^\s*-Y\s+(\d+)\s+\+X\s+(\d+)\s*$/);
+      if (m) size = [+m[2], +m[1]];
+      format ||= /^\s*FORMAT=\S+\s*$/.test(line);
+      if (size && format) break;
+    }
+    return size;
   }
   // EXR: 8 bytes of magic number and version, then attributes: name, type, int32 size, value.
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes.length < 8 || view.getInt32(0, true) !== 20000630) return [0, 0]; // EXRLoader reports the bad file
+  if (bytes.length < 8 || view.getInt32(0, true) !== 20000630) return null; // not an EXR
   const text = (at: number) => {
     const end = bytes.indexOf(0, at);
     return [new TextDecoder().decode(bytes.subarray(at, end)), end + 1] as const;
@@ -43,7 +51,7 @@ function headerSize(name: string, bytes: Uint8Array): [number, number] {
     if (value + size <= at) break; // a broken header would loop
     at = value + size;
   }
-  return [0, 0];
+  return null;
 }
 
 // Box-filters RGBA from w x h to W x H. Source rows are bottom first unless topFirst; the result is bottom first.
@@ -112,7 +120,9 @@ function thumbnail(image: Float32Array, W: number, H: number) {
 
 self.onmessage = async ({ data: { name, bytes } }: MessageEvent<{ name: string; bytes: Uint8Array }>) => {
   try {
-    const [w, h] = headerSize(name, bytes);
+    const size = headerSize(name, bytes);
+    if (!size) throw new Error('No image size in the header.');
+    const [w, h] = size;
     if (w > LIMITS.hdriWidth || h > LIMITS.hdriHeight) return postMessage({ error: 'size' });
     const hdr = /\.hdr$/i.test(name);
     const loader = hdr ? new HDRLoader() : new EXRLoader();
@@ -128,6 +138,8 @@ self.onmessage = async ({ data: { name, bytes } }: MessageEvent<{ name: string; 
     const exr = await new EXRExporter().parse(new DataTexture(image, W, H, RGBAFormat, FloatType), { type: HalfFloatType, compression: ZIP_COMPRESSION });
     postMessage({ exr: new Blob([exr as BlobPart], { type: 'image/x-exr' }), thumb: await thumbnail(image, W, H), sun });
   } catch (error) {
-    postMessage({ error: error instanceof RangeError ? 'memory' : String(error) });
+    // Only a failed allocation is "memory". A broken file also throws RangeError (reading past a DataView's end).
+    const memory = error instanceof RangeError && /allocation|Invalid typed array length|Array buffer/i.test(error.message);
+    postMessage({ error: memory ? 'memory' : String(error) });
   }
 };

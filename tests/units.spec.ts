@@ -266,9 +266,10 @@ test('uploads: the triangle limit', async ({ page }) => {
 
 test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page }) => {
   await openApp(page);
-  const zips = Object.fromEntries(['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-16k.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
+  const zips = Object.fromEntries(['hdri-exr.zip', 'hdri-hdr.zip', 'hdri-16k.zip', 'hdri-16k-spaced.zip', 'hdri-cut.zip'].map((name) => [name, [...readFileSync(`tests/fixtures/uploads/${name}`)]]));
   const r = await page.evaluate(async (zips) => {
     const p = await import('/src/uploads/process.ts');
+    const { UploadError } = await import('/src/uploads/types.ts');
     // EXRLoader at the URL Vite gives the Worker's import, to read the stored file back.
     const worker = await (await fetch('/src/uploads/hdri.worker.ts')).text();
     const { EXRLoader } = await import(worker.match(/from ["']([^"']*EXRLoader[^"']*)["']/)![1]);
@@ -281,7 +282,8 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
         const thumb = await createImageBitmap(upload.thumb);
         results[name] = { kind: upload.kind, sun: upload.sun, size: [exr.width, exr.height], thumb: [thumb.width, thumb.height] };
       } catch (error) {
-        results[name] = { error: (error as Error).message };
+        // The toast uploader.ts shows: an UploadError's message, otherwise "Couldn't read this zip.".
+        results[name] = { error: error instanceof UploadError ? error.message : "Couldn't read this zip." };
       }
     }
     return results;
@@ -297,4 +299,8 @@ test('uploads: HDRIs are decoded in a Worker, with the sun found', async ({ page
     expect(thumb).toEqual([256, 128]);
   }
   expect(r['hdri-16k.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
+  // Double spaces, a tab and over 4 KB of comments, which HDRLoader still reads.
+  expect(r['hdri-16k-spaced.zip']).toEqual({ error: 'HDRIs up to 8K only.' });
+  // A cut EXR throws a RangeError while decoding. It is a read error, not the memory message.
+  expect(r['hdri-cut.zip']).toEqual({ error: "Couldn't read this zip." });
 });

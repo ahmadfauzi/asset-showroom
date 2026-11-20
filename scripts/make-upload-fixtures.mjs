@@ -167,10 +167,18 @@ const pixels = new Float32Array(W * H * 4);
 for (let row = 0; row < H; row++)
   for (let x = 0; x < W; x++) pixels.set(white(x, H - 1 - row) ? [1, 1, 1, 1] : [0, 0, 0, 1], (row * W + x) * 4);
 const texture = new DataTexture(pixels, W, H, RGBAFormat, FloatType);
-zip('hdri-exr.zip', { 'Sky_HDR.exr': await new EXRExporter().parse(texture, { type: HalfFloatType }) });
+const exr = await new EXRExporter().parse(texture, { type: HalfFloatType });
+zip('hdri-exr.zip', { 'Sky_HDR.exr': exr });
+// The same file cut to 400 bytes, inside the table of chunk offsets (bytes 331 to 458). The header is whole, and
+// EXRLoader reads past the end, which throws a RangeError. Cut in half instead, it fails with "unexpected EOF".
+zip('hdri-cut.zip', { 'Sky_HDR.exr': exr.slice(0, 400) });
 // Flat RGBE, top row first. A black first pixel tells HDRLoader the data is not run-length encoded.
 const rgbe = new Uint8Array(W * H * 4);
 for (let top = 0; top < H; top++) for (let x = 0; x < W; x++) if (white(x, top)) rgbe.set([255, 255, 255, 128], (top * W + x) * 4);
 const hdrHeader = (w, h) => bytes(`#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y ${h} +X ${w}\n`);
 zip('hdri-hdr.zip', { 'Sky.hdr': new Uint8Array([...hdrHeader(W, H), ...rgbe]) });
 zip('hdri-16k.zip', { 'Big.hdr': new Uint8Array([...hdrHeader(16384, 8192), 0, 0, 0, 0, 0, 0, 0, 0]) });
+// A 16K header that HDRLoader still reads: over 4 KB of comments, and double spaces and a tab on the size line.
+const comments = '# a comment line that pads the header\n'.repeat(150);
+const spaced = bytes(`#?RADIANCE\n${comments}FORMAT=32-bit_rle_rgbe\n\n-Y  8192\t+X  16384 \n`);
+zip('hdri-16k-spaced.zip', { 'Big.hdr': new Uint8Array([...spaced, 0, 0, 0, 0, 0, 0, 0, 0]) });
