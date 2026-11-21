@@ -616,17 +616,19 @@ The app checks the file names in the zip in this order. Files with "preview" in 
 
 To find which map an image is, its file name (without folders) is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Then:
 
-- If any word starts with `disp`, `height`, `bump`, `refl`, `sss`, `opacity`, `alpha` or `mask`, the file is ignored.
-- Every word after a size word (`2k`, `4k`, `8k` and so on) is dropped. Poliigon puts workflow words there, as in `Name_COL_4K_METALNESS.jpg`.
-- The map comes from the last word left that matches a map word. So `NordicOak_Roughness.jpg` is a roughness map, not a normal map.
+- The words are read from the last one back. The first word that is an ignore word or a map word decides.
+- An ignore word (starting with `disp`, `height`, `bump`, `refl`, `sss`, `opacity`, `alpha` or `mask`) means the file is ignored. A map word gives that map. So `NordicOak_Roughness.jpg` is a roughness map, not a normal map, and `AlphaPine_COL.jpg` is a colour map.
+- A word starting with `metal` right after a size word (`1k`, `4k`, `8k` and so on) is skipped. Poliigon puts its workflow word there, as in `Name_COL_4K_METALNESS.jpg`. It only counts as a metalness map if no other word matches, as in `Rust_4K_Metalness.jpg`.
 
-A model's maps are grouped by the words before that word, so `PlantMonsteraVase001_COL_4K_METALNESS.jpg` is in the group `plantmonsteravase001`. This rule changed on 21 Nov 2026 after the final review. Before, any word could match, in the order colour, normal, AO, gloss, roughness, metalness, so `NordicOak_Roughness.jpg` counted as a normal map.
+This reads ambientCG names (`Wood049_1K-JPG_Color.jpg`) and Poly Haven names (`oak_veneer_01_diff_1k.jpg`) too. A model's maps are grouped by the words before the word that gave the map, so `PlantMonsteraVase001_COL_4K_METALNESS.jpg` is in the group `plantmonsteravase001`.
+
+This rule changed twice on 21 Nov 2026. Before the final review, any word could match, in the order colour, normal, AO, gloss, roughness, metalness, so `NordicOak_Roughness.jpg` counted as a normal map. The first change dropped every word after a size word and ignored a file if any word was an ignore word. That turned away ambientCG names and names such as `AlphaPine_COL.jpg`, so it was corrected to the rule above the same day. The colour word `diffuse` also became `diff` then, so Poly Haven's `diff` maps count.
 
 The kind of upload:
 
 1. A `.glb`, `.gltf` or `.fbx` file: a model. If there are several, the largest is used.
 2. Otherwise, a `.blend`, `.max`, `.c4d` or `.ma` file: "Export it as .glb or .fbx first."
-3. Otherwise, an image with a colour word in its name (`basecolor`, `albedo`, `diffuse`, `col`): a texture.
+3. Otherwise, an image with a colour word in its name (`basecolor`, `albedo`, `diff`, `col`): a texture.
 4. Otherwise, an `.exr` or `.hdr` file: an HDRI. `.exr` wins over `.hdr`, then the largest.
 5. Otherwise: "This zip has no texture, model or HDRI we can read."
 
@@ -641,7 +643,7 @@ Each upload is processed once. Only the result is stored, never the zip. Uploads
 | Map | Names | Stored as |
 | --- | --- | --- |
 | Colour | The colour words in 16.4 | 2K, sRGB |
-| Normal | `normal`, `nrm`, `nor` | 1K. Green is flipped if the file name contains `DX` in capitals, the same test as the texture script (7.3) |
+| Normal | `normal`, `nrm`, `nor` | 1K. A DirectX map has a word that is or ends in `dx`, in any case, such as Poliigon's `NormalDX` or Poly Haven's `nor_dx`. Its green is flipped. If the zip has a DirectX and a non-DirectX normal map, the non-DirectX one is used. Changed on 21 Nov 2026, before it was `DX` in capitals anywhere in the file name |
 | AO, roughness, metalness | `ambientocclusion`, `ao`, `occlusion`; `roughness`, `rough`; `metallic`, `metalness`, `metal` | Packed into one 2K map: AO in red, roughness in green, metalness in blue (7.3) |
 
 - `gloss` or `glossiness` maps become roughness (1 minus gloss).

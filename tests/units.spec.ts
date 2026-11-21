@@ -83,6 +83,8 @@ test('uploads: kind detection on the example zip lists', async ({ page }) => {
       monstera: kind(e('PlantMonstera001_preview1.png', 'PlantMonstera001_Blender_Cycles.blend', 'PlantMonstera001_COL_4K_METALNESS.jpg')),
       sunset: kind(e('HdrSkySunset007_preview1.jpg', 'HdrSkySunset007_HDR_8K.exr', 'HdrSkySunset007_JPG_8K.jpg')),
       textureWithExr: kind(e('Wood_COL.jpg', 'Wood_DISP.exr')),
+      ambientCG: kind(e('Wood049.png', 'Wood049_1K-JPG.mtlx', 'Wood049_1K-JPG_AmbientOcclusion.jpg', 'Wood049_1K-JPG_Color.jpg', 'Wood049_1K-JPG_Displacement.jpg', 'Wood049_1K-JPG_NormalDX.jpg', 'Wood049_1K-JPG_NormalGL.jpg', 'Wood049_1K-JPG_Roughness.jpg')),
+      polyHaven: kind(e('oak_veneer_01_arm_1k.jpg', 'oak_veneer_01_diff_1k.jpg', 'oak_veneer_01_disp_1k.png', 'oak_veneer_01_nor_dx_1k.png', 'oak_veneer_01_nor_gl_1k.png', 'oak_veneer_01_rough_1k.jpg')),
       nothing: kind(e('readme.txt')),
       largestMesh: kind([{ name: 'a.glb', size: 10 }, { name: 'b.fbx', size: 20 }]),
       exrOverHdr: kind([{ name: 'sky.hdr', size: 50 }, { name: 'sky.exr', size: 10 }]),
@@ -93,6 +95,8 @@ test('uploads: kind detection on the example zip lists', async ({ page }) => {
   expect(r.monstera).toBe('Export it as .glb or .fbx first.');
   expect(r.sunset).toEqual({ kind: 'hdri', main: 'HdrSkySunset007_HDR_8K.exr' });
   expect(r.textureWithExr).toEqual({ kind: 'texture', main: 'Wood_COL.jpg' });
+  expect(r.ambientCG).toEqual({ kind: 'texture', main: 'Wood049_1K-JPG_Color.jpg' });
+  expect(r.polyHaven).toEqual({ kind: 'texture', main: 'oak_veneer_01_diff_1k.jpg' });
   expect(r.nothing).toBe('This zip has no texture, model or HDRI we can read.');
   expect(r.largestMesh).toEqual({ kind: 'model', main: 'b.fbx' });
   expect(r.exrOverHdr).toEqual({ kind: 'hdri', main: 'sky.exr' });
@@ -106,6 +110,9 @@ test('uploads: map roles and size limits', async ({ page }) => {
       roles: ['X_BaseColor.jpg', 'X_COL_4K.jpg', 'X_Colour.png', 'X_NormalDX.png', 'X_NRM.jpg', 'X_AmbientOcclusion.jpg', 'X_GLOSS_4K.jpg', 'X_Roughness.jpg', 'X_Metallic.jpg', 'X_METALNESS.jpg', 'X_REFL.jpg', 'X_SSS.jpg', 'X_Displacement.tiff', 'X_BaseColor.tiff'].map(d.mapRole),
       // The rule from 21 Nov 2026 (PRD 16.4): ignored words, then words after a size word go, then the last map word.
       named: ['NordicOak_Roughness.jpg', 'GlossyTile_Roughness.jpg', 'ColorfulTiles_Normal.png', 'ColdSteel_NRM.jpg', 'WoodFlooring044_DISP_2K_METALNESS.jpg', 'Poliigon_MetalPainted_7037_Displacement.jpg', 'Poliigon_MetalPainted_7037_Roughness.jpg', 'PlantMonstera001_COL_4K_METALNESS.jpg', 'PlantOrchid001_GLOSS_4K_SPECULAR.jpg', 'HdrSkySunset007_JPG_8K.jpg'].map(d.mapRole),
+      // The rule as corrected on 21 Nov 2026: ambientCG and Poly Haven names, ignore words inside a name, and
+      // Poliigon's METALNESS workflow word after the size.
+      corrected: ['Wood049_1K-JPG_Color.jpg', 'Wood049_1K-JPG_NormalGL.jpg', 'Wood049_1K-JPG_Roughness.jpg', 'Wood049_1K-JPG_AmbientOcclusion.jpg', 'Wood049_1K-JPG_Displacement.jpg', 'Metal032_1K-JPG_Metalness.jpg', 'oak_veneer_01_diff_1k.jpg', 'oak_veneer_01_nor_gl_1k.png', 'oak_veneer_01_rough_1k.jpg', 'oak_veneer_01_disp_1k.png', 'AlphaPine_COL.jpg', 'Poliigon_AlphaPine_COL.jpg', 'HeightsGrass_Roughness.jpg', 'MaskedStone_BaseColor.jpg', 'Wood_1K_COL.jpg', 'Rust_4K_Metalness.jpg', 'PlantMonstera001_METALNESS_4K_METALNESS.jpg'].map(d.mapRole),
       // The words before the one the role came from, which model.ts groups maps by.
       prefix: d.mapWord('PlantMonsteraVase001_COL_4K_METALNESS.jpg'),
       words: d.words('2K/Poliigon_Stone-Quartzite 8060.BaseColor.jpg'),
@@ -116,6 +123,7 @@ test('uploads: map roles and size limits', async ({ page }) => {
   });
   expect(r.roles).toEqual(['color', 'color', 'color', 'normal', 'normal', 'ao', 'gloss', 'roughness', 'metalness', 'metalness', null, null, null, null]);
   expect(r.named).toEqual(['roughness', 'roughness', 'normal', 'normal', null, null, 'roughness', 'color', 'gloss', null]);
+  expect(r.corrected).toEqual(['color', 'normal', 'roughness', 'ao', null, 'metalness', 'color', 'normal', 'roughness', null, 'color', 'color', 'roughness', 'color', 'color', 'metalness', 'metalness']);
   expect(r.prefix).toEqual({ role: 'color', index: 1 });
   expect(r.words).toEqual(['poliigon', 'stone', 'quartzite', '8060', 'basecolor', 'jpg']);
   expect(r).toMatchObject({ ok: 'ok', bigZip: 'This zip is over 250 MB.', bigUnzipped: 'This zip unpacks to more than 1 GB.' });
@@ -201,6 +209,32 @@ test('uploads: folder names called Preview or DX change nothing', async ({ page 
   }, [...data]));
   expect(r.kind).toBe('texture');
   expect(Math.abs(r.normal[1] - 200)).toBeLessThanOrEqual(2); // not flipped to 55
+});
+
+test('uploads: a GL normal map wins over a DirectX one, and a dx word flips green', async ({ page }) => {
+  const png = (size: number, background: string) => sharp({ create: { width: size, height: size, channels: 3, background } }).png().toBuffer().then((b) => new Uint8Array(b));
+  const diff = await png(8, '#c86432');
+  const gl = await png(4, '#80c8ff'); // green 200
+  const dx = await png(64, '#8032ff'); // green 50, and the bigger file
+  expect(dx.length).toBeGreaterThan(gl.length);
+  const zips = [
+    zipSync({ 'oak_diff_1k.jpg': diff, 'oak_nor_gl_1k.png': gl, 'oak_nor_dx_1k.png': dx }),
+    zipSync({ 'oak_diff_1k.jpg': diff, 'oak_nor_dx_1k.png': dx }),
+  ].map((data) => [...data]);
+  const greens = await run(page, async () => {}).then(() => page.evaluate(async (zips) => {
+    const p = await import('/src/uploads/process.ts');
+    const green = async (bytes: number[]) => {
+      const upload = await p.processZip(new File([new Uint8Array(bytes)], 'oak.zip'), null as never, () => {}, () => {});
+      const bitmap = await createImageBitmap((upload.files as { normal: Blob }).normal);
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(bitmap, 0, 0);
+      return ctx.getImageData(0, 0, 1, 1).data[1];
+    };
+    return [await green(zips[0]), await green(zips[1])];
+  }, zips));
+  expect(Math.abs(greens[0] - 200)).toBeLessThanOrEqual(2); // the GL map, not flipped
+  expect(Math.abs(greens[1] - 205)).toBeLessThanOrEqual(2); // the DX map, flipped from 50
 });
 
 // The model tests need the app's renderer, which the app puts on window.showroom with the fixture set.

@@ -1,4 +1,4 @@
-import { baseName, MESSAGES, mapRole, type MapRole } from './detect';
+import { MESSAGES, mapRole, words, type MapRole } from './detect';
 import { UploadError, type TextureFiles } from './types';
 
 const COLOR_MAX = 2048;
@@ -33,12 +33,19 @@ const grey = (bitmap: ImageBitmap | undefined, width: number, height: number) =>
   return (i: number) => data[i * 4];
 };
 
+// A DirectX normal map: a word in the file name (not the folder) that is or ends in `dx`, as in Poliigon's `NormalDX`
+// and Poly Haven's `nor_dx`.
+const directX = (name: string) => words(name).some((word) => word.endsWith('dx'));
+
 export async function processTexture(files: Record<string, Uint8Array>): Promise<{ files: TextureFiles; thumb: Blob }> {
-  // If several files share a role, the biggest file wins.
+  // If several files share a role, the biggest file wins. A normal map that isn't DirectX wins over one that is.
   const picked = new Map<MapRole, string>();
   for (const [name, bytes] of Object.entries(files)) {
     const role = mapRole(name);
-    if (role && bytes.length > (files[picked.get(role)!]?.length ?? -1)) picked.set(role, name);
+    if (!role) continue;
+    const old = picked.get(role);
+    const better = old === undefined || (role === 'normal' && directX(old) !== directX(name) ? directX(old) : bytes.length > files[old].length);
+    if (better) picked.set(role, name);
   }
   const bitmap = async (role: MapRole) => (picked.has(role) ? decode(files[picked.get(role)!]) : undefined);
 
@@ -52,9 +59,8 @@ export async function processTexture(files: Record<string, Uint8Array>): Promise
   if (normalMap) {
     const n = fit(normalMap.width, normalMap.height, NORMAL_MAX);
     const { canvas, ctx } = draw(normalMap, n.width, n.height);
-    // three.js expects green up. Poliigon marks DirectX normals with "DX" in the file name (not
-    // the folder), the same rule as scripts/build-textures.mjs.
-    if (/DX/.test(baseName(picked.get('normal')!))) {
+    // three.js expects green up, so a DirectX map's green is flipped.
+    if (directX(picked.get('normal')!)) {
       const img = ctx.getImageData(0, 0, n.width, n.height);
       for (let i = 1; i < img.data.length; i += 4) img.data[i] = 255 - img.data[i];
       ctx.putImageData(img, 0, 0);

@@ -7,7 +7,7 @@ export type MapRole = 'color' | 'normal' | 'ao' | 'roughness' | 'gloss' | 'metal
 
 // Checked in this order, so `gloss` is tried before `roughness`.
 const ROLE_WORDS: [MapRole, string[]][] = [
-  ['color', ['basecolor', 'albedo', 'diffuse', 'col']],
+  ['color', ['basecolor', 'albedo', 'diff', 'col']],
   ['normal', ['normal', 'nrm', 'nor']],
   ['ao', ['ambientocclusion', 'occlusion', 'ao']],
   ['gloss', ['gloss']],
@@ -26,19 +26,23 @@ export const words = (fileName: string) =>
 // Maps the app doesn't use.
 const IGNORED = ['disp', 'height', 'bump', 'refl', 'sss', 'opacity', 'alpha', 'mask'];
 
-// The map's role and the index of the word it came from (PRD 16.4). Words after a size word such as `4k` are
-// dropped, since Poliigon puts workflow words there (`Name_COL_4K_METALNESS.jpg`). Then the last word that starts
-// with a map word gives the role.
+// The map's role and the index of the word it came from (PRD 16.4). The words are read from the end, and the first
+// ignored word or map word decides. A `metal` word right after a size word is Poliigon's workflow word
+// (`Name_COL_4K_METALNESS.jpg`), so it only counts if nothing else matches (`Rust_4K_Metalness.jpg`).
 export function mapWord(fileName: string): { role: MapRole; index: number } | null {
   if (!['jpg', 'jpeg', 'png', 'webp'].includes(ext(fileName))) return null;
   const w = words(fileName);
-  if (w.some((x) => IGNORED.some((n) => x.startsWith(n)))) return null;
-  const size = w.findIndex((x) => /^\d+k$/.test(x));
-  for (let index = (size < 0 ? w.length : size) - 1; index >= 0; index--) {
+  let skipped = -1;
+  for (let index = w.length - 1; index >= 0; index--) {
+    if (skipped < 0 && index > 0 && /^\d+k$/.test(w[index - 1]) && w[index].startsWith('metal')) {
+      skipped = index;
+      continue;
+    }
+    if (IGNORED.some((n) => w[index].startsWith(n))) return null;
     const role = ROLE_WORDS.find(([, names]) => names.some((n) => w[index].startsWith(n)))?.[0];
     if (role) return { role, index };
   }
-  return null;
+  return skipped < 0 ? null : { role: 'metalness', index: skipped };
 }
 
 export const mapRole = (fileName: string): MapRole | null => mapWord(fileName)?.role ?? null;
