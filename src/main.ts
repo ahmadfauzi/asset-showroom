@@ -24,27 +24,35 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import manifest, { type TextureInfo } from '@manifest';
+import manifest from '@manifest';
 import { createDaylight, DEFAULT_TIME } from './daylight';
 import { commit as record, createHistory, redo as stepForward, undo as stepBack, type History } from './history';
 import { createHud, DRAG_TYPE } from './hud';
-import { accepts, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
+import { createPlacements, fallback, inside, surfaceAt, type Placed } from './placement';
+import { accepts, fits, ROOMS, SLOT_NAMES, type RoomKey, type Slot } from './room';
 import { buildRoom, type BuiltRoom } from './rooms/index';
+import { untextured } from './rooms/parts';
 import { createSnow } from './snow';
 import { fromHash, toHash, type RoomState } from './state';
 import { createToolbar } from './toolbar';
+import { createLibrary } from './uploads/library';
+import { createUploadsTab, MODEL_DRAG_TYPE } from './uploads/tab';
+import { LIMITS, MESSAGES, type AnyTexture, type Sky, type UploadMeta } from './uploads/types';
+import { createUploader } from './uploads/uploader';
 
 // One per room, made the first time the room is needed. It keeps the room's textures, time, snow and undo
 // history while another room shows (PRD 15.6).
 type RoomSession = {
   built: BuiltRoom;
   latest: Partial<Record<Slot, string>>; // the last texture picked for each slot, even if it is still loading
-  current: Partial<Record<Slot, TextureInfo>>; // the texture each slot shows
+  current: Partial<Record<Slot, AnyTexture>>; // the texture each slot shows
   history: History<RoomState>;
   time: number; // the room's time while another room shows
   snow: boolean;
   flakes?: ReturnType<typeof createSnow>; // the Garden only
   loads: Promise<unknown>[]; // the default textures and models, which the loader waits for
+  placed: Placed[]; // uploaded models, in placing order (PRD 16.8)
+  sky: Sky; // the Garden only (PRD 16.9)
 };
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -56,6 +64,10 @@ if (!gl) {
   loader.remove();
   document.getElementById('no-webgl')!.style.display = 'block';
 } else {
+  // The uploads in this browser are read before the link, so the link can use their ids (PRD 16.10).
+  const library = await createLibrary();
+  // A bundled texture or an uploaded one (u-xxxxxxxx).
+  const findTexture = (slug: string): AnyTexture | undefined => manifest.textures.find((t) => t.slug === slug) ?? library.texture(slug);
   const renderer = new WebGLRenderer({ canvas, context: gl });
   // Neutral keeps the textures' own colours: whites stay white and wood stays brown (ACES shifts them toward
   // orange, AgX greys them). It is a little darker than ACES, so the exposure keeps the v1 brightness.
@@ -84,7 +96,11 @@ if (!gl) {
 
   // OrbitControls zooms in steps, so the wheel sets a target distance and the loop eases towards it.
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const daylight = createDaylight(scene, renderer, reducedMotion, () => commit());
+  // The Turn sky slider only changes the daylight's turn, so it is copied to the room here.
+  const daylight = createDaylight(scene, renderer, reducedMotion, () => {
+    if (active.sky) active.sky = { ...active.sky, turn: daylight.skyTurn() };
+    commit();
+  });
   const ease = reducedMotion ? 1 : 0.12;
   let distance = 0;
   canvas.addEventListener(
@@ -115,63 +131,137 @@ if (!gl) {
   outline.edgeStrength = 4;
   outline.edgeThickness = 1;
 
+  // A surface or a placed model can be selected, not both. Selecting a surface, or none, clears the model.
   let selected: Slot | null = null;
   const select = (slot: Slot | null) => {
     selected = slot;
-    outline.selectedObjects = slot ? active.built.group.children.filter((mesh) => mesh.userData.slot === slot) : [];
     hud.setSelected(slot);
+    placements.select(null);
+  };
+  // Each model is named after its upload, counted from 1 in this room: "PlantOrchid001 2" (PRD 16.8).
+  const modelNames = () => {
+    const counts = new Map<string, number>();
+    return active.placed.map(({ placement: { id } }) => {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+      return `${library.get(id)?.name ?? id} ${counts.get(id)}`;
+    });
+  };
+  const showSelection = () => {
+    const model = placements.selected();
+    outline.selectedObjects = selected
+      ? active.built.group.children.filter((mesh) => mesh.userData.slot === selected)
+      : model === null ? [] : [active.placed[model].object];
+    hud.setModels(modelNames(), model);
+  };
+  const use = (texture: AnyTexture) => {
+    if (!selected || !fits(selected, texture)) return;
+    applyTexture(active, selected, texture);
+    commit();
   };
   const hud = createHud({
     onSelect: select,
-    onApply(texture) {
-      if (!selected || !accepts(selected, texture.category)) return;
-      applyTexture(active, selected, texture);
-      commit();
-    },
+    onApply: use,
+    onSize: (id, sizeCm) => void library.setSize(id, sizeCm),
     onRoom: (key) => void showRoom(key),
+    onModel: (index) => placements.select(index),
   });
 
   const raycaster = new Raycaster();
   const pointer = new Vector2();
-  const hitAt = (event: MouseEvent) => {
-    pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+  // A ray through a point on the canvas, from -1 to 1 across and up.
+  const aim = (x: number, y: number) => {
+    pointer.set(x, y);
+    camera.updateMatrixWorld(); // a slow frame may not have done it yet since the camera last moved
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObject(active.built.group)[0];
+    return raycaster;
   };
+  const rayAt = (event: MouseEvent) => aim((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+  const hitAt = (event: MouseEvent) => rayAt(event).intersectObject(active.built.group)[0];
   const slotAt = (event: MouseEvent): Slot | null => hitAt(event)?.object.userData.slot ?? null;
 
   const tooltip = document.getElementById('tooltip')!;
   const tooltipTitle = tooltip.firstElementChild!;
+  const tooltipHint = tooltip.lastElementChild as HTMLElement;
   canvas.addEventListener('pointermove', (event) => {
-    const slot = event.buttons ? null : slotAt(event);
-    canvas.style.cursor = slot ? 'pointer' : '';
-    tooltip.hidden = !slot;
-    if (!slot) return;
-    tooltipTitle.textContent = `${SLOT_NAMES[slot]} · ${active.current[slot]?.name ?? 'No texture'}`;
+    const object = event.buttons ? null : (hitAt(event)?.object ?? null);
+    const model = active.placed.find((p) => inside(object, p.object));
+    const slot: Slot | null = object?.userData.slot ?? null;
+    canvas.style.cursor = model ? 'grab' : slot ? 'pointer' : '';
+    tooltip.hidden = !model && !slot;
+    if (tooltip.hidden) return;
+    tooltipTitle.textContent = model
+      ? `${library.get(model.placement.id)?.name ?? model.placement.id} · drag to move`
+      : `${SLOT_NAMES[slot!]} · ${active.current[slot!]?.name ?? 'No texture'}`;
+    tooltipHint.hidden = !!model;
     const x = Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8);
     const y = Math.min(event.clientY + 14, window.innerHeight - tooltip.offsetHeight - 8);
     tooltip.style.transform = `translate(${x}px, ${y}px)`;
   });
   canvas.addEventListener('pointerleave', () => (tooltip.hidden = true));
 
+  // Placed models (PRD 16.8). A new model shows on the surface the ray meets, or in the middle of the floor.
+  const placements = createPlacements({
+    camera,
+    canvas,
+    controls,
+    library,
+    active: () => active,
+    onCommit: () => commit(),
+    onSelect(index) {
+      if (index !== null && selected) {
+        selected = null;
+        hud.setSelected(null);
+      }
+      showSelection();
+    },
+    // As for a texture that fails to load, the link and history are brought back in line with the room, without an
+    // undo step. Every session main.ts passes in is a RoomSession.
+    onFailed(session, id) {
+      const room = session as RoomSession;
+      room.history.committed = snapshot(room);
+      if (room !== active) return;
+      placements.select(null); // the selected model's index may have changed
+      save();
+      toolbar.toast(`Couldn't load ${library.get(id)?.name ?? 'the model'}. Try again.`);
+    },
+  });
+  const placeModel = (id: string, ray: Raycaster) => {
+    if (library.get(id)?.kind !== 'model') return;
+    if (active.placed.length >= LIMITS.modelsPerRoom) return toolbar.toast(MESSAGES.cap);
+    placements.place(active, id, surfaceAt(ray, active.built.group) ?? fallback(active.built));
+  };
+
   // A click is a press and release less than 5 px apart, so orbit drags don't change the selection.
+  // Pressing on a placed model drags it instead. This runs before orbit's own listener, so orbit never starts.
   let pressedAt: [number, number] | null = null;
-  canvas.addEventListener('pointerdown', (event) => (pressedAt = [event.clientX, event.clientY]));
+  canvas.addEventListener(
+    'pointerdown',
+    (event) => {
+      const index = placements.hit(event);
+      pressedAt = index === null ? [event.clientX, event.clientY] : null;
+      if (index !== null) placements.startDrag(active, index, event);
+    },
+    { capture: true },
+  );
   canvas.addEventListener('pointerup', (event) => {
     if (pressedAt && Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) < 5) select(slotAt(event));
     pressedAt = null;
   });
 
   // Dropping a swatch on a surface applies it there. A surface that doesn't accept the category ignores it.
+  // A model swatch dropped on the room places that model.
   canvas.addEventListener('dragover', (event) => {
-    if (event.dataTransfer?.types.includes(DRAG_TYPE)) event.preventDefault();
+    const types = event.dataTransfer?.types ?? [];
+    if (types.includes(DRAG_TYPE) || types.includes(MODEL_DRAG_TYPE)) event.preventDefault();
   });
   canvas.addEventListener('drop', (event) => {
     event.preventDefault();
-    const texture = manifest.textures.find((t) => t.slug === event.dataTransfer?.getData(DRAG_TYPE));
+    const model = event.dataTransfer?.getData(MODEL_DRAG_TYPE);
+    if (model) return placeModel(model, rayAt(event));
+    const texture = findTexture(event.dataTransfer?.getData(DRAG_TYPE) ?? '');
     const hit = hitAt(event);
     const slot: Slot | undefined = hit?.object.userData.slot;
-    if (!texture || !hit || !slot || !accepts(slot, texture.category)) return;
+    if (!texture || !hit || !slot || !fits(slot, texture)) return;
     select(slot);
     applyTexture(active, slot, texture, hit.point);
     commit();
@@ -183,23 +273,50 @@ if (!gl) {
     textures: { ...session.latest },
     time: session === active ? daylight.target() : session.time,
     snow: session.snow,
+    models: session.placed.map((p) => p.placement),
+    sky: session.sky,
   });
+  // A saved state without the uploads deleted since (PRD 16.6): their surfaces take the room's default.
+  const clean = (saved: RoomState): RoomState => {
+    const ids = library.ids();
+    const defaults = manifest.defaults[active.built.key] ?? {};
+    const textures = { ...saved.textures };
+    for (const [slot, slug] of Object.entries(textures) as [Slot, string][]) if (!findTexture(slug)) textures[slot] = defaults[slot];
+    return {
+      ...saved,
+      textures,
+      models: saved.models.filter((m) => ids.has(m.id)),
+      sky: saved.sky && ids.has(saved.sky.id) ? saved.sky : null,
+    };
+  };
   const save = () => {
-    window.history.replaceState(null, '', toHash(active.built.key, active.history.committed));
-    toolbar.setHistory(active.history.past.length > 0, active.history.future.length > 0);
+    const { key } = active.built;
+    const { past, committed, future } = active.history;
+    const now = toHash(key, committed);
+    window.history.replaceState(null, '', now);
+    // Undo and redo are on only while a step would change the room (see step).
+    const changes = (state: RoomState) => toHash(key, clean(state)) !== now;
+    toolbar.setHistory(past.some(changes), future.some(changes));
   };
   const commit = () => {
     const { key } = active.built;
     if (record(active.history, snapshot(active), (state) => toHash(key, state))) save();
   };
-  // ponytail: a slot can't go back to having no texture. A full manifest gives every slot a default.
-  const restore = (state: RoomState | undefined) => {
-    if (!state) return;
-    for (const [slot, slug] of Object.entries(state.textures) as [Slot, string][]) {
-      const texture = manifest.textures.find((t) => t.slug === slug);
-      if (texture && slug !== active.latest[slot]) applyTexture(active, slot, texture);
+  // A slot the state has no texture for goes back to none, as a slot with no default in the set starts.
+  const restore = (state: RoomState) => {
+    for (const slot of ROOMS[active.built.key].slots as Slot[]) {
+      const slug = state.textures[slot];
+      const texture = slug ? findTexture(slug) : undefined;
+      if (!slug && (active.latest[slot] || active.current[slot])) clearTexture(active, slot);
+      else if (texture && slug !== active.latest[slot] && fits(slot, texture)) applyTexture(active, slot, texture);
     }
+    void placements.sync(active, state.models);
+    // The selected model stays selected while it is still in the list.
+    const model = placements.selected();
+    placements.select(model !== null && active.placed[model] ? model : null);
     daylight.setTime(state.time);
+    active.sky = state.sky;
+    showSky(active);
     active.snow = state.snow;
     showSnow();
     save();
@@ -221,8 +338,46 @@ if (!gl) {
     showSnow();
     commit();
   });
-  const undo = () => restore(stepBack(active.history));
-  const redo = () => restore(stepForward(active.history));
+  // Shows the room's sky. An HDRI shows once it is read from the store, if it is still the sky of the room that
+  // shows (PRD 16.9). If it can't be read, the room goes back to the drawn sky, as a texture does to its last one.
+  const showSky = (session: RoomSession) => {
+    const { sky } = session;
+    if (!sky) return daylight.setSky(null);
+    daylight.setSkyTurn(sky.turn);
+    library.loadSky(sky.id).then(
+      (loaded) => session === active && session.sky?.id === sky.id && daylight.setSky({ ...loaded, turn: session.sky.turn }),
+      (error) => {
+        console.error(error);
+        if (session.sky?.id !== sky.id) return;
+        session.sky = null;
+        session.history.committed = snapshot(session);
+        if (session !== active) return;
+        daylight.setSky(null);
+        save();
+        toolbar.toast(`Couldn't load ${library.get(sky.id)?.name ?? 'the sky'}. Try again.`);
+      },
+    );
+  };
+  // Back to the drawn sky and the clock. The button hides, so focus moves to the time slider.
+  document.getElementById('time-of-day')!.addEventListener('click', () => {
+    active.sky = null;
+    showSky(active);
+    commit();
+    document.querySelector<HTMLInputElement>('.time input')!.focus();
+  });
+  // Undo and redo. A step that changes nothing once deleted uploads are taken out is skipped, so each press
+  // changes the room (PRD 16.6). The cleaned states replace the saved ones.
+  const step = (move: (history: History<RoomState>) => RoomState | undefined) => {
+    const { key } = active.built;
+    const now = toHash(key, active.history.committed);
+    for (let saved = move(active.history); saved; saved = move(active.history)) {
+      const state = (active.history.committed = clean(saved));
+      if (toHash(key, state) !== now) return restore(state);
+    }
+    save();
+  };
+  const undo = () => step(stepBack);
+  const redo = () => step(stepForward);
 
   // Saves the view without the HUD or the selection outline, at the canvas size (PRD 6.9).
   const savePicture = () => {
@@ -249,13 +404,122 @@ if (!gl) {
     save: savePicture,
     copy: () =>
       navigator.clipboard.writeText(location.href).then(
-        () => toolbar.toast('Link copied. Anyone who opens it sees this room.'),
+        () => toolbar.toast(/=u-/.test(location.hash) ? 'Link copied. Uploads only show in this browser.' : 'Link copied. Anyone who opens it sees this room.'),
         () => toolbar.toast("Couldn't copy the link. Copy it from the address bar instead."),
       ),
+    upload: () => uploader.pick(),
   });
+
+  // Uploads (PRD 16.3, 16.6).
+  const uploadsTab = createUploadsTab({
+    thumb: library.thumb,
+    onUse(meta) {
+      if (meta.kind === 'model') return placeModel(meta.id, aim(0, 0));
+      // Sky swatches only work in the Garden, where the tab enables them.
+      if (meta.kind === 'hdri') {
+        active.sky = { id: meta.id, turn: 0 };
+        showSky(active);
+        return commit();
+      }
+      const texture = library.texture(meta.id);
+      if (texture) use(texture);
+    },
+    onDelete(meta) {
+      const rooms = usage(meta.id);
+      const n = rooms.length;
+      if (!confirm(n ? `Used in ${n} room${n > 1 ? 's' : ''}. Delete it?` : `Delete ${meta.name}?`)) return;
+      library.remove(meta.id).then(
+        async () => {
+          uploadsTab.setUploads(library.list());
+          await Promise.all(rooms.map((key) => forget(sessions[key]!, meta.id)));
+          release(meta);
+        },
+        () => toolbar.toast(`Couldn't delete ${meta.name}. Try again.`),
+      );
+    },
+  });
+  // The rooms that use an upload on a surface, in a placement or as the sky.
+  const usage = (id: string) =>
+    (Object.keys(sessions) as RoomKey[]).filter((key) => {
+      const { latest, current, placed, sky } = sessions[key]!;
+      return (
+        Object.values(latest).includes(id) ||
+        Object.values(current).some((texture) => texture?.slug === id) ||
+        placed.some((p) => p.placement.id === id) ||
+        sky?.id === id
+      );
+    });
+  // Takes a deleted upload out of a room: surfaces go back to the room's defaults (or to no texture if the set has
+  // none), its placements go and the sky goes back to the drawn one. It isn't an undo step (PRD 16.6). Settles once
+  // the defaults show.
+  const forget = (session: RoomSession, id: string) => {
+    const defaults = manifest.defaults[session.built.key] ?? {};
+    const resets = (ROOMS[session.built.key].slots as Slot[])
+      .filter((slot) => session.latest[slot] === id || session.current[slot]?.slug === id)
+      .map((slot) => (defaults[slot] ? applyTexture(session, slot, findTexture(defaults[slot])!) : clearTexture(session, slot)));
+    const models = session.placed.filter((p) => p.placement.id !== id).map((p) => p.placement);
+    const removed = models.length < session.placed.length;
+    void placements.sync(session, models);
+    const sky = session.sky?.id === id;
+    if (sky) session.sky = null;
+    session.history.committed = snapshot(session);
+    if (session === active) {
+      if (removed) placements.select(null); // the selected model's index may have changed
+      if (sky) showSky(session);
+      save();
+    }
+    return Promise.all(resets);
+  };
+  uploadsTab.setUploads(library.list());
+  const uploader = createUploader({ library, tab: uploadsTab, toolbar, renderer, onAdded: () => {} });
+
+  // The selected model's bar sits above the model on screen, inside the window (PRD 16.8). On narrow screens the
+  // tray runs across the bottom, so the bar stays above it.
+  const bar = document.getElementById('model-bar')!;
+  const tray = document.getElementById('tray')!;
+  for (const button of bar.querySelectorAll<HTMLButtonElement>('[data-turn]')) {
+    button.addEventListener('click', () => placements.turn(Number(button.dataset.turn) as 15 | -15));
+  }
+  bar.querySelector('[data-action="remove"]')!.addEventListener('click', () => placements.remove());
+  const bounds = new Box3();
+  const corner = new Vector3();
+  let barSize = [0, 0]; // read when the bar shows, not every frame
+  const placeBar = () => {
+    const model = placements.selected();
+    // A stale index hides the bar rather than throwing every frame.
+    const entry = model === null ? undefined : active.placed[model];
+    if (!entry) return void (bar.hidden = true);
+    if (bar.hidden) {
+      bar.hidden = false;
+      barSize = [bar.offsetWidth, bar.offsetHeight];
+    }
+    const [width, height] = barSize;
+    // A model that is still loading has no size, so its own position stands in.
+    const { object } = entry;
+    bounds.setFromObject(object).expandByPoint(object.getWorldPosition(corner));
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? bounds.max.x : bounds.min.x, i & 2 ? bounds.max.y : bounds.min.y, i & 4 ? bounds.max.z : bounds.min.z).project(camera);
+      const x = ((corner.x + 1) / 2) * innerWidth;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, ((1 - corner.y) / 2) * innerHeight);
+    }
+    const bottom = narrow.matches ? tray.getBoundingClientRect().top : innerHeight;
+    const x = MathUtils.clamp((left + right) / 2 - width / 2, 8, innerWidth - width - 8);
+    const y = MathUtils.clamp(top - height - 8, 8, bottom - height - 8);
+    bar.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
+
+  // Keys for the selected model (PRD 16.8): [right, towards the camera] in steps of 0.1 m.
+  const ARROWS: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
   // Keys (PRD 6.10). Esc also closes the help dialog, which the browser does itself.
   window.addEventListener('keydown', (event) => {
+    // Keys typed in a field, such as an uploaded texture's size, stay in the field. The time slider isn't one.
+    if ((event.target as Element).closest?.('input:not([type=range]),textarea,select,[contenteditable]')) return;
     if (event.key === 'Escape') return select(null);
     if (toolbar.help.open || event.altKey) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
@@ -263,8 +527,19 @@ if (!gl) {
       return event.shiftKey ? redo() : undo();
     }
     if (event.ctrlKey || event.metaKey) return;
+    // Not while focus is in the time slider, which uses the arrows itself.
+    if (placements.selected() !== null && !(event.target as Element).closest?.('input')) {
+      const key = event.key.toLowerCase();
+      if (ARROWS[event.key]) {
+        event.preventDefault();
+        placements.move(...ARROWS[event.key]);
+      }
+      if (key === 'q' || key === 'e') placements.turn(key === 'e' ? 15 : -15);
+      if (event.key === 'Delete' || event.key === 'Backspace') placements.remove();
+    }
     if (event.key === 'r' || event.key === 'R') resetView();
-    if (event.key === '[' || event.key === ']') {
+    // The HDRI sets the light, so there is no time to move (PRD 16.9).
+    if ((event.key === '[' || event.key === ']') && !active.sky) {
       daylight.setTime(daylight.target() + (event.key === ']' ? 1 : -1));
       commit();
     }
@@ -283,7 +558,9 @@ if (!gl) {
   composer.addPass(gtao);
   // The Playwright tests read the camera and the room's materials, and switch GTAO off for steady screenshots.
   if (manifest.set === 'fixture') {
-    Object.assign(window, { showroom: { camera, gtao, renderer, scene, materials: () => active.built.materials } });
+    Object.assign(window, {
+      showroom: { camera, gtao, renderer, scene, materials: () => active.built.materials, placed: () => active.placed.map((p) => p.placement) },
+    });
   }
   composer.addPass(new UnrealBloomPass(new Vector2(), 0.2, 0.4, 0.9));
   composer.addPass(outline);
@@ -332,6 +609,7 @@ if (!gl) {
     controls.update();
     daylight.update();
     active.flakes?.update(performance.now() / 1000);
+    placeBar();
     composer.render();
   });
 
@@ -342,23 +620,34 @@ if (!gl) {
   const ready = new Set<string>();
   const progress = new Map<string, number>();
   const waiting = new Set<string>(); // slugs someone applied before they finished loading
-  const load = ({ slug, sizeCm }: TextureInfo) => {
+  // Uploaded maps come from the library, which sets their wrapping and size.
+  const load = (texture: AnyTexture) => {
+    const { slug, sizeCm } = texture;
     if (!loaded.has(slug)) {
       const files = [0, 0, 0];
-      const maps = ['color', 'normal', 'orm'].map((map, i) =>
-        ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`, (event) => {
-          files[i] = event.total ? event.loaded / event.total : 0;
-          progress.set(slug, (files[0] + files[1] + files[2]) / 3);
-          if (waiting.has(slug)) hud.setProgress(slug, progress.get(slug)!);
-        }),
-      );
+      const maps =
+        'uploaded' in texture
+          ? library.loadTexture(slug)
+          : Promise.all(
+              ['color', 'normal', 'orm'].map((map, i) =>
+                ktx2.loadAsync(`/textures/${slug}/${map}.ktx2`, (event) => {
+                  files[i] = event.total ? event.loaded / event.total : 0;
+                  progress.set(slug, (files[0] + files[1] + files[2]) / 3);
+                  if (waiting.has(slug)) hud.setProgress(slug, progress.get(slug)!);
+                }),
+              ),
+            ).then((textures) => {
+              for (const map of textures) {
+                map.wrapS = map.wrapT = RepeatWrapping;
+                map.repeat.set(100 / sizeCm[0], 100 / sizeCm[1]);
+              }
+              return textures;
+            });
       loaded.set(
         slug,
-        Promise.all(maps)
+        maps
           .then((textures) => {
             for (const texture of textures) {
-              texture.wrapS = texture.wrapT = RepeatWrapping;
-              texture.repeat.set(100 / sizeCm[0], 100 / sizeCm[1]);
               texture.anisotropy = anisotropy;
               // The Playwright tests read which texture a material shows.
               if (manifest.set === 'fixture') texture.name = slug;
@@ -374,6 +663,22 @@ if (!gl) {
       );
     }
     return loaded.get(slug)!;
+  };
+  // Frees what a deleted upload still holds, once no room shows it (PRD 16.6).
+  const release = ({ id, kind }: UploadMeta) => {
+    const maps = loaded.get(id);
+    loaded.delete(id);
+    progress.delete(id);
+    // A load still running is freed when it ends.
+    maps?.then(
+      (textures) => {
+        ready.delete(id);
+        for (const texture of textures) texture.dispose();
+      },
+      () => {},
+    );
+    library.release(id);
+    if (kind === 'hdri') daylight.dropSky();
   };
   const apply = (material: MeshStandardMaterial, [color, normal, orm]: Texture[]) => {
     Object.assign(material, { map: color, normalMap: normal, aoMap: orm, roughnessMap: orm, metalnessMap: orm });
@@ -439,9 +744,19 @@ if (!gl) {
       requestAnimationFrame(step);
     });
 
+  // Takes a slot back to no texture, as roomKit made it. A texture still loading for it is dropped when it lands.
+  const clearTexture = (session: RoomSession, slot: Slot) => {
+    const material = session.built.materials[slot]!;
+    material.setValues({ map: null, normalMap: null, aoMap: null, roughnessMap: null, metalnessMap: null, ...untextured(slot) });
+    material.needsUpdate = true;
+    delete session.latest[slot];
+    delete session.current[slot];
+    if (session === active) hud.setTexture(slot);
+  };
+
   // The last texture picked for a slot wins, even if an earlier one finishes loading later. A texture that
   // finishes after a room switch still lands on the room it was picked in.
-  const applyTexture = async (session: RoomSession, slot: Slot, texture: TextureInfo, dropPoint?: Vector3) => {
+  const applyTexture = async (session: RoomSession, slot: Slot, texture: AnyTexture, dropPoint?: Vector3) => {
     session.latest[slot] = texture.slug;
     // A texture that isn't loaded yet shows a progress ring on its swatch until it is (PRD 6.11 step 4).
     if (!ready.has(texture.slug)) {
@@ -475,7 +790,7 @@ if (!gl) {
 
   // A room opens with its defaults. The room in the link also takes the link's textures, time and snow
   // (PRD 6.8, 15.7).
-  const link = fromHash(location.hash);
+  const link = fromHash(location.hash, library.ids());
   const sessionFor = (key: RoomKey) => (sessions[key] ??= createSession(key));
   const createSession = (key: RoomKey) => {
     const fromLink = key === link.room;
@@ -486,14 +801,20 @@ if (!gl) {
       built,
       latest: {},
       current: {},
-      history: createHistory<RoomState>({ textures: {}, time, snow }), // replaced below, once the picks are in
+      history: createHistory<RoomState>({ textures: {}, time, snow, models: [], sky: null }), // replaced below, once the picks are in
       time,
       snow,
+      // The link's sky, if it is an HDRI in this browser. The loader waits for it (PRD 16.11).
+      sky: fromLink && link.sky && library.get(link.sky.id)?.kind === 'hdri' ? link.sky : null,
       loads: [built.models.then((failed) => failed.length && session === active && toolbar.toast("Couldn't load some decor. The room still works."))],
+      placed: [],
     };
+    // The link's models, if they are uploaded models in this browser (PRD 16.10).
+    if (fromLink) session.loads.push(placements.sync(session, link.models.filter((m) => library.get(m.id)?.kind === 'model')));
+    if (session.sky) session.loads.push(library.loadSky(session.sky.id));
     const picks = { ...(manifest.defaults[key] ?? {}), ...(fromLink ? link.textures : {}) };
     for (const [slot, slug] of Object.entries(picks) as [Slot, string][]) {
-      const texture = manifest.textures.find((t) => t.slug === slug);
+      const texture = findTexture(slug);
       if (texture && built.materials[slot]) session.loads.push(applyTexture(session, slot, texture));
     }
     // The flakes fall inside the garden's bounds, with the top 4 m higher.
@@ -522,8 +843,11 @@ if (!gl) {
     resetView();
     daylight.setRoom(session.built);
     daylight.setTime(session.time);
-    select(null);
+    showSky(session);
+    // After setRoom, which empties the slot panel, so the room's models are listed again.
     hud.setRoom(key, session.current);
+    select(null);
+    uploadsTab.setRoom(key);
     showSnow();
     save();
     if (loaderDone && gtao.enabled) frame = 0;
@@ -567,7 +891,9 @@ if (!gl) {
       loaderDone = true;
       frame = 0;
     });
-    if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");
+    // Only one toast: the uploads one wins (PRD 16.10).
+    if (link.uploadsMissing) toolbar.toast("This link uses uploads that are only on the sender's computer, so you see the defaults.");
+    else if (link.missing) toolbar.toast("Some textures in this link aren't available, so those surfaces show their defaults.");
     // Then, one texture at a time to leave bandwidth for a texture someone picks: the rest of this room's
     // textures, then each other room with its textures and models.
     const others = (Object.keys(ROOMS) as RoomKey[]).filter((key) => key !== link.room);

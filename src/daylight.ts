@@ -2,6 +2,7 @@ import {
   BufferGeometry,
   Color,
   CubeCamera,
+  type DataTexture,
   DirectionalLight,
   Float32BufferAttribute,
   HalfFloatType,
@@ -20,6 +21,7 @@ import {
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { BuiltRoom } from './rooms/index';
+import type { SkySun } from './uploads/types';
 
 const SUNRISE = 6;
 const SUNSET = 20;
@@ -45,6 +47,11 @@ const ROOM_LIGHT = { day: 0.15, night: 0.03 };
 const MIRROR = { day: 1, night: 0.1 };
 const FILL = { day: 0.3, night: 0.2 };
 const FILL_OUTDOORS = { day: 1.2, night: 1.6 };
+// An uploaded HDRI's brightness as the background and as the light (PRD 16.9). A tuning knob.
+const HDRI_LIGHT = 1;
+// The hemisphere fill while an HDRI shows. The HDRI's own light is the fill, so it is off. A tuning knob.
+const HDRI_FILL = 0;
+const UP = new Vector3(0, 1, 0);
 
 // Stars, about 1500 points 70 m from the middle of the room, inside the camera's far plane (100 m). They go all the way
 // round, since the camera looks down on the garden and sees the sky around the plinth, not above it.
@@ -96,9 +103,18 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
   const lastSun = new Vector3(); // the sun direction the environment was made with
   let environmentDirty = false;
   const stars = makeStars();
+  // The uploaded HDRI that is the sky, if any (PRD 16.9). Its environment map is kept for the last sky shown, so
+  // undo and room switches don't make it again.
+  type HdriSky = { texture: DataTexture; sun: SkySun };
+  let hdri: HdriSky | null = null;
+  let hdriEnvironment: { texture: DataTexture; target: WebGLRenderTarget } | null = null;
+  let turn = 0; // degrees
 
+  const panel = document.getElementById('daylight')!;
   const clock = document.querySelector<HTMLElement>('#daylight .clock')!;
   const slider = document.querySelector<HTMLInputElement>('#daylight input')!;
+  const note = document.querySelector<HTMLElement>('#daylight .note')!;
+  const timeOfDay = document.getElementById('time-of-day')!;
   const presetButtons = Object.entries(PRESETS).map(([label, hours]) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -116,6 +132,16 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
 
   function setTime(hours: number) {
     time = MathUtils.clamp(hours, 6, 22);
+    clock.textContent = format(time);
+    for (const { button, hours } of presetButtons) button.setAttribute('aria-pressed', String(hours === time));
+    // The HDRI sets the light. The time is still kept for the link and for when the drawn sky comes back.
+    if (hdri) {
+      sky.intensity = HDRI_FILL;
+      for (const lamp of lamps) lamp.intensity = 0;
+      if (room) room.shade.emissiveIntensity = 0;
+      stars.visible = false;
+      return;
+    }
 
     // The sun rises on the right (+x), is highest over the open front (+z) at 13:00 and sets on the left.
     const day = (time - SUNRISE) / (SUNSET - SUNRISE);
@@ -163,10 +189,31 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
       room.glass.emissiveIntensity = 0.4 * light;
     }
 
-    clock.textContent = format(time);
     slider.value = String(time);
     slider.setAttribute('aria-valuetext', format(time));
-    for (const { button, hours } of presetButtons) button.setAttribute('aria-pressed', String(hours === time));
+  }
+
+  // Turns the HDRI, its light and the sun together. A turn of 360 is stored as 0.
+  function setSkyTurn(degrees: number) {
+    turn = degrees % 360;
+    if (!hdri) return;
+    const angle = MathUtils.degToRad(turn);
+    scene.backgroundRotation.y = scene.environmentRotation.y = angle;
+    if (hdri.sun) sun.position.fromArray(hdri.sun.direction).multiplyScalar(20).applyAxisAngle(UP, angle);
+    // Not while the slider is held at 360, so its thumb doesn't jump back to 0.
+    if (Number(slider.value) % 360 !== turn) slider.value = String(turn);
+    slider.setAttribute('aria-valuetext', `${turn} degrees`);
+  }
+
+  // With an HDRI the clock and presets grey out and the slider turns the sky. On narrow screens the time row is in
+  // the tray, so it gets the class too.
+  function showHdriControls(on: boolean) {
+    panel.classList.toggle('hdri', on);
+    timeRow.classList.toggle('hdri', on);
+    note.hidden = timeOfDay.hidden = !on;
+    for (const { button } of presetButtons) button.disabled = on;
+    Object.assign(slider, on ? { min: '0', max: '360', step: '5' } : { min: '6', max: '22', step: '0.25' });
+    slider.setAttribute('aria-label', on ? 'Turn sky' : 'Time of day');
   }
 
   // Presets move the sun over 2 s. The slider and the [ ] keys set the time at once.
@@ -177,6 +224,7 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
 
   // The slider moves the sun while it is dragged, and counts as one change when it is let go.
   slider.addEventListener('input', () => {
+    if (hdri) return setSkyTurn(Number(slider.value));
     tween = null;
     setTime(Number(slider.value));
   });
@@ -225,6 +273,48 @@ export function createDaylight(scene: Scene, renderer: WebGLRenderer, reducedMot
       // The mirrors are known once the models load.
       next.models.then(() => room === next && setTime(time)).catch(console.error);
     },
+    // An uploaded HDRI as the Garden's sky, or null for the drawn sky and the clock (PRD 16.9). Call it after setRoom.
+    setSky(next: (HdriSky & { turn: number }) | null) {
+      if (!next) {
+        if (!hdri) return;
+        hdri = null;
+        scene.backgroundRotation.y = scene.environmentRotation.y = 0;
+        scene.backgroundIntensity = SKY_BACKGROUND;
+        showHdriControls(false);
+        // As setRoom does. Outdoors the drawn sky is made again on the next frame.
+        if (room?.outdoor) environmentDirty = true;
+        else {
+          scene.background = indoorBackground;
+          scene.environment = roomEnvironment;
+        }
+        return setTime(time);
+      }
+      if (hdriEnvironment?.texture !== next.texture) {
+        hdriEnvironment?.target.dispose();
+        hdriEnvironment = { texture: next.texture, target: pmrem.fromEquirectangular(next.texture) };
+      }
+      hdri = { texture: next.texture, sun: next.sun };
+      environmentDirty = false;
+      scene.background = next.texture;
+      scene.environment = hdriEnvironment.target.texture;
+      scene.backgroundIntensity = scene.environmentIntensity = HDRI_LIGHT;
+      sun.visible = !!next.sun;
+      if (next.sun) {
+        sun.color.fromArray(next.sun.color);
+        sun.intensity = 3;
+      }
+      showHdriControls(true);
+      setSkyTurn(next.turn);
+      setTime(time);
+    },
+    // Frees the environment map kept for the last HDRI, unless it shows. For a deleted HDRI (PRD 16.6).
+    dropSky() {
+      if (hdri || !hdriEnvironment) return;
+      hdriEnvironment.target.dispose();
+      hdriEnvironment = null;
+    },
+    setSkyTurn,
+    skyTurn: () => turn,
     // Call once per frame.
     update() {
       if (environmentDirty) {

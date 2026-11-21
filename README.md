@@ -74,6 +74,23 @@ The script compresses the mesh with meshopt and the textures with KTX2, at 512 p
 
 In dev, `/models/` is served from `models-built/`. `npm run build` copies the models listed in `src/rooms.json` to `dist/models/` and fails if one has no built file. A model that fails to load in the browser is skipped, and a toast says so.
 
+## Uploads
+
+Upload a `.zip` with the toolbar's Upload button, or drop it on the page. One upload runs at a time. See PRD section 16.
+
+| The zip has | It becomes |
+| --- | --- |
+| A `.glb`, `.gltf` or `.fbx` file | A model you can place in any room, up to 10 per room |
+| A `.blend`, `.max`, `.c4d` or `.ma` file and no model | Nothing. It says "Export it as .glb or .fbx first." |
+| An image with `basecolor`, `albedo`, `diffuse` or `col` in its name | A texture for any surface |
+| An `.exr` or `.hdr` file | A sky for the Garden |
+
+Each upload is processed once in the browser. Only the result is kept, never the zip: textures as a 2K colour map, a 1K normal map and a 2K packed AO, roughness and metalness map; models as one `.glb` with 1K maps; skies as a 2048 × 1024 `.exr`. They are kept in this browser's IndexedDB (database `asset-showroom`), so they are not sent anywhere and a shared link shows the defaults in other browsers. Safari can clear them after 7 days without a visit.
+
+Limits: the zip up to 250 MB, the unpacked files up to 1 GB, models up to 500,000 triangles, HDRIs up to 8192 × 4096.
+
+The upload code loads on the first upload, so it adds nothing to the first load. `npm test` checks this (the build test "upload code is not in the start-up JavaScript").
+
 ## First load
 
 The first load of a room is the sum of these files. The loader waits for the room you open and not for the other rooms. The other rooms load in the background afterwards.
@@ -105,6 +122,8 @@ npm test
 ```
 
 The tests run on 2 workers and take about 12 minutes or more. Headless Chromium draws WebGL in software, so a busy machine can make a test time out. Run a test that timed out on its own again before you look for a bug. The tests start their own Vite server on port 5174, so keep that port free.
+
+`tests/uploads.spec.ts` uploads small zips from `tests/fixtures/uploads/`, made by `scripts/make-upload-fixtures.mjs`. The Poliigon example zips are never committed.
 
 `tests/units.spec.ts` tests plain modules such as `src/history.ts` and `src/state.ts`. It loads them in the browser through the Vite dev server, so it needs no extra setup.
 

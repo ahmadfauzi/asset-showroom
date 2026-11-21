@@ -225,10 +225,13 @@ export const view = ([x, y, z]: [number, number, number], minDistance: number, m
   maxAzimuth: Math.PI / 2 + 0.2,
 });
 
+// A surface before it has a texture: its placeholder colour, fairly rough, not metal.
+export const untextured = (slot: Slot) => ({ color: PLACEHOLDER[slot], roughness: 0.8, metalness: 0 });
+
 // Starts a room: one placeholder-coloured material per surface the room has, a group, and add() to place parts.
 export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
   const materials: Partial<Record<Slot, MeshStandardMaterial>> = {};
-  for (const slot of ROOMS[key].slots as Slot[]) materials[slot] = new MeshStandardMaterial({ color: PLACEHOLDER[slot], roughness: 0.8 });
+  for (const slot of ROOMS[key].slots as Slot[]) materials[slot] = new MeshStandardMaterial(untextured(slot));
   const group = new Group();
 
   // Turns the parts by rotY, moves them to (x, z) and adds them as meshes. Slot meshes get userData.slot.
@@ -304,6 +307,8 @@ export function roomKit(key: RoomKey, ktx2: KTX2Loader) {
     outdoor,
     extent,
     view,
+    // Every room's floor, and the Garden's lawn, is centred on x = z = 0 with its top at y = 0.
+    floorCentre: new Vector3(),
     models: Promise.all(loading).then(() => failed),
   });
 

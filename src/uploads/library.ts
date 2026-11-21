@@ -1,0 +1,148 @@
+import { RepeatWrapping, SRGBColorSpace, Texture, type DataTexture, type Group, type Mesh } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { deleteUpload, getFiles, listUploads, putUpload, setSize as saveSize } from './store';
+import type { SkySun, TextureFiles, Upload, UploadedTexture, UploadMeta } from './types';
+
+export type Library = {
+  list(): UploadMeta[];
+  ids(): Set<string>;
+  get(id: string): UploadMeta | undefined;
+  thumb(id: string): string;
+  texture(id: string): UploadedTexture | undefined;
+  loadTexture(id: string): Promise<Texture[]>;
+  loadModel(id: string): Promise<Group>;
+  loadSky(id: string): Promise<{ texture: DataTexture; sun: SkySun }>;
+  setSize(id: string, sizeCm: [number, number]): Promise<void>;
+  add(upload: Upload): Promise<void>;
+  remove(id: string): Promise<void>;
+  release(id: string): void;
+};
+
+const repeat = (maps: Texture[], [width, height]: [number, number]) => {
+  for (const map of maps) map.repeat.set(100 / width, 100 / height);
+};
+
+// The uploads in this browser, newest first (PRD 16.6). Read once at start, then kept in step with the store.
+export async function createLibrary(): Promise<Library> {
+  // If IndexedDB can't open (some private windows), the room still loads with no uploads.
+  let list = await listUploads().catch((error) => {
+    console.warn('Asset Showroom: could not read uploads.', error);
+    return [] as UploadMeta[];
+  });
+  const thumbs = new Map<string, string>();
+  // One object per upload, so a new size shows wherever it is used.
+  const textures = new Map<string, UploadedTexture>();
+  const maps = new Map<string, Texture[]>();
+  const models = new Map<string, Promise<Group>>();
+  const skies = new Map<string, ReturnType<Library['loadSky']>>();
+  const get = (id: string) => list.find((meta) => meta.id === id);
+  const thumb = (id: string) => {
+    if (!thumbs.has(id)) thumbs.set(id, URL.createObjectURL(get(id)!.thumb));
+    return thumbs.get(id)!;
+  };
+  const texture = (id: string) => {
+    const meta = get(id);
+    if (meta?.kind !== 'texture') return undefined;
+    if (!textures.has(id)) textures.set(id, { slug: id, name: meta.name, sizeCm: meta.sizeCm ?? [100, 100], uploaded: true, thumb: thumb(id) });
+    return textures.get(id);
+  };
+
+  return {
+    list: () => list,
+    ids: () => new Set(list.map((meta) => meta.id)),
+    get,
+    thumb,
+    texture,
+    // Colour, normal and ORM, the same way up as the bundled KTX2 maps, which three.js never flips.
+    async loadTexture(id) {
+      const { color, normal, orm } = (await getFiles(id)) as TextureFiles;
+      const loaded = await Promise.all(
+        [color, normal, orm].map(async (blob) => {
+          const map = new Texture(await createImageBitmap(blob, { colorSpaceConversion: 'none' }));
+          map.flipY = false;
+          map.wrapS = map.wrapT = RepeatWrapping;
+          map.needsUpdate = true;
+          return map;
+        }),
+      );
+      loaded[0].colorSpace = SRGBColorSpace;
+      // Not kept if the upload was deleted while it loaded.
+      const uploaded = texture(id);
+      if (uploaded) {
+        repeat(loaded, uploaded.sizeCm);
+        maps.set(id, loaded);
+      }
+      return loaded;
+    },
+    // The stored glb, read once. Each placement gets its own copy, which shares the geometry and materials.
+    async loadModel(id) {
+      if (!models.has(id)) {
+        const loading = (async () => {
+          const { glb } = (await getFiles(id)) as { glb: Blob };
+          const { scene } = await new GLTFLoader().parseAsync(await glb.arrayBuffer(), '');
+          scene.traverse((object) => {
+            if ((object as Mesh).isMesh) object.castShadow = object.receiveShadow = true;
+          });
+          return scene;
+        })();
+        // Forget a failed read so the next placement tries again.
+        loading.catch(() => models.delete(id));
+        models.set(id, loading);
+      }
+      return (await models.get(id)!).clone();
+    },
+    // The stored 2K .exr and its sun (PRD 16.9), read once.
+    loadSky(id) {
+      if (!skies.has(id)) {
+        const loading = (async () => {
+          const [{ readSky }, files] = await Promise.all([import('./sky'), getFiles(id)]);
+          return { texture: await readSky((files as { exr: Blob }).exr), sun: get(id)?.sun ?? null };
+        })();
+        // Forget a failed read so the next use tries again.
+        loading.catch(() => skies.delete(id));
+        skies.set(id, loading);
+      }
+      return skies.get(id)!;
+    },
+    // Changes the upload everywhere it shows, in every room (PRD 16.7).
+    async setSize(id, sizeCm) {
+      const uploaded = texture(id);
+      if (uploaded) uploaded.sizeCm = sizeCm;
+      repeat(maps.get(id) ?? [], sizeCm);
+      await saveSize(id, sizeCm);
+    },
+    async add(upload) {
+      await putUpload(upload);
+      const { files: _files, ...meta } = upload;
+      list = [meta, ...list];
+    },
+    async remove(id) {
+      await deleteUpload(id);
+      list = list.filter((meta) => meta.id !== id);
+    },
+    // Frees what a removed upload still holds, once nothing shows it. The texture maps are main.ts's to dispose.
+    release(id) {
+      if (thumbs.has(id)) URL.revokeObjectURL(thumbs.get(id)!);
+      thumbs.delete(id);
+      textures.delete(id);
+      maps.delete(id);
+      // The placed copies share the model's geometry and materials.
+      void models.get(id)?.then(
+        (model) =>
+          model.traverse((object) => {
+            const mesh = object as Mesh;
+            if (!mesh.isMesh) return;
+            mesh.geometry.dispose();
+            for (const material of [mesh.material].flat()) {
+              for (const value of Object.values(material)) if ((value as Texture)?.isTexture) (value as Texture).dispose();
+              material.dispose();
+            }
+          }),
+        () => {},
+      );
+      models.delete(id);
+      void skies.get(id)?.then(({ texture }) => texture.dispose(), () => {});
+      skies.delete(id);
+    },
+  };
+}

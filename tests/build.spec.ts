@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -96,6 +96,27 @@ test.describe('set isolation', () => {
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+
+  // The start-up JavaScript before v3: the entry chunk (assets/index-*.js) of `VITE_ASSET_SET=fixture npx vite build`
+  // on commit d83e87d, which has the same code as 64c77f1.
+  const ENTRY_BYTES_V2 = 877165;
+
+  test('upload code is not in the start-up JavaScript', () => {
+    const run = build();
+    expect(run.status, run.stderr).toBe(0);
+    // The entry script and every chunk index.html preloads, which is all the JavaScript loaded at start.
+    const html = readFileSync(join(outDir, 'index.html'), 'utf8');
+    const files = [...html.matchAll(/<(?:script type="module"|link rel="modulepreload")[^>]*(?:src|href)="\/(assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+    expect(files.some((file) => file.startsWith('assets/index-'))).toBe(true);
+    const chunks = files.map((file) => ({ file, code: readFileSync(join(outDir, file)) }));
+    // FBXLoader, EXRLoader, GLTFExporter and fflate's unzip.
+    for (const { file, code } of chunks) {
+      for (const text of ['Kaydara', 'EXRLoader', 'GLTFExporter', 'invalid zip data']) expect(code.includes(text), `${text} in ${file}`).toBe(false);
+    }
+    const total = chunks.reduce((sum, { code }) => sum + code.length, 0);
+    // PRD 16.11: v3 may add up to 50 KB (raised from 10 KB, then 30 KB, on 19 Nov 2026).
+    expect(total, `start-up JavaScript: ${files.join(', ')} = ${total} bytes`).toBeLessThanOrEqual(ENTRY_BYTES_V2 + 50 * 1024);
   });
 
   test.afterAll(() => rmSync(outDir, { recursive: true, force: true }));

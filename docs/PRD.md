@@ -1,6 +1,6 @@
 # Asset Showroom PRD
 
-As of 9 Oct 2026, v2 section added 17 Nov 2026, v3 section added 18 Nov 2026 · Ahmad Fauzi · Status: v2 built, v3 draft
+As of 9 Oct 2026, v2 section added 17 Nov 2026, v3 section added 18 Nov 2026 · Ahmad Fauzi · Status: v3 built
 
 Reference: *Set the Mood (sael.net/interior) Replication Knowledge Base*, 7 Oct 2026. "The reference" below means that site.
 
@@ -612,11 +612,23 @@ The zip's file list is read before anything is unpacked, so the size checks and 
 
 ### 16.4 Working out the kind
 
-The app checks the file names in the zip in this order. A file name is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Files with "preview" in the name are ignored.
+The app checks the file names in the zip in this order. Files with "preview" in the file name are ignored. A folder name doesn't count, here or for the `DX` test in 16.5.
+
+To find which map an image is, its file name (without folders) is split into words on `_`, `-`, `.` and spaces, ignoring case. A word matches a map word if it starts with it, so `NormalDX` matches `normal` and `Colour` matches `col`. Then:
+
+- The words are read from the last one back. The first word that is an ignore word or a map word decides.
+- An ignore word (starting with `disp`, `height`, `bump`, `refl`, `sss`, `opacity`, `alpha` or `mask`) means the file is ignored. A map word gives that map. So `NordicOak_Roughness.jpg` is a roughness map, not a normal map, and `AlphaPine_COL.jpg` is a colour map.
+- A word starting with `metal` right after a size word (`1k`, `4k`, `8k` and so on) is skipped. Poliigon puts its workflow word there, as in `Name_COL_4K_METALNESS.jpg`. It only counts as a metalness map if no other word matches, as in `Rust_4K_Metalness.jpg`.
+
+This reads ambientCG names (`Wood049_1K-JPG_Color.jpg`) and Poly Haven names (`oak_veneer_01_diff_1k.jpg`) too. A model's maps are grouped by the words before the word that gave the map, so `PlantMonsteraVase001_COL_4K_METALNESS.jpg` is in the group `plantmonsteravase001`.
+
+This rule changed twice on 21 Nov 2026. Before the final review, any word could match, in the order colour, normal, AO, gloss, roughness, metalness, so `NordicOak_Roughness.jpg` counted as a normal map. The first change dropped every word after a size word and ignored a file if any word was an ignore word. That turned away ambientCG names and names such as `AlphaPine_COL.jpg`, so it was corrected to the rule above the same day. The colour word `diffuse` also became `diff` then, so Poly Haven's `diff` maps count.
+
+The kind of upload:
 
 1. A `.glb`, `.gltf` or `.fbx` file: a model. If there are several, the largest is used.
 2. Otherwise, a `.blend`, `.max`, `.c4d` or `.ma` file: "Export it as .glb or .fbx first."
-3. Otherwise, an image with a colour word in its name (`basecolor`, `albedo`, `diffuse`, `col`): a texture.
+3. Otherwise, an image with a colour word in its name (`basecolor`, `albedo`, `diff`, `col`): a texture.
 4. Otherwise, an `.exr` or `.hdr` file: an HDRI. `.exr` wins over `.hdr`, then the largest.
 5. Otherwise: "This zip has no texture, model or HDRI we can read."
 
@@ -631,7 +643,7 @@ Each upload is processed once. Only the result is stored, never the zip. Uploads
 | Map | Names | Stored as |
 | --- | --- | --- |
 | Colour | The colour words in 16.4 | 2K, sRGB |
-| Normal | `normal`, `nrm`, `nor` | 1K. Green is flipped if the file name contains `DX` in capitals, the same test as the texture script (7.3) |
+| Normal | `normal`, `nrm`, `nor` | 1K. A DirectX map has a word that is or ends in `dx`, in any case, such as Poliigon's `NormalDX` or Poly Haven's `nor_dx`. Its green is flipped. If the zip has a DirectX and a non-DirectX normal map, the non-DirectX one is used. Changed on 21 Nov 2026, before it was `DX` in capitals anywhere in the file name |
 | AO, roughness, metalness | `ambientocclusion`, `ao`, `occlusion`; `roughness`, `rough`; `metallic`, `metalness`, `metal` | Packed into one 2K map: AO in red, roughness in green, metalness in blue (7.3) |
 
 - `gloss` or `glossiness` maps become roughness (1 minus gloss).
@@ -653,7 +665,8 @@ Each upload is processed once. Only the result is stored, never the zip. Uploads
 
 - `.exr` is read with `EXRLoader` and `.hdr` with `HDRLoader`, inside a Worker, so the page doesn't freeze. Checked in Node: the 8K example (8192 × 4096, PIZ compression) took 6.4 s and 634 MB of memory to decode.
 - It is scaled to 2048 × 1024 and stored as an `.exr` written with `EXRExporter` (half float).
-- The brightest spot is found at upload and stored with it, for the sun (16.9).
+- Sky-only HDRIs (the lower half is under 1% as bright as the upper half, leaving out the 5° just below the horizon) get their black lower half filled at upload. Just below the horizon each column takes the horizon colour above it, capped at 3 times the median so the sun can't light the ground from below. By 10° below, it blends into one even colour, and it darkens to half by the bottom. Added on 20 Nov 2026: with the sunset example, the default view showed black around the plinth.
+- The brightest spot is found at upload and stored with it, for the sun (16.9). In a filled HDRI the search only looks above the horizon.
 - The thumbnail is a 256 px tone-mapped picture.
 
 ### 16.6 Uploads tab
@@ -663,7 +676,7 @@ Each upload is processed once. Only the result is stored, never the zip. Uploads
 - The Uploads tab is never dimmed when a surface is selected, because uploaded textures fit every surface.
 - Sky swatches can only be used in the Garden. In other rooms they are greyed out and say "Skies work in the Garden."
 - Empty tab: "Upload a .zip with a texture, a model or an HDRI. It stays in this browser."
-- Delete asks first. If the upload is in use, it says where, for example "Used in 2 rooms. Delete it?". After a delete, surfaces that used it go back to the room's default, placed copies are removed, the Garden goes back to the drawn sky, and undo steps skip it. The delete itself can't be undone.
+- Delete asks first. If the upload is in use, it says where, for example "Used in 2 rooms. Delete it?". After a delete, surfaces that used it go back to the room's default (or to no texture, if the set has no default for that surface), placed copies are removed, the Garden goes back to the drawn sky, and undo steps skip it. The delete itself can't be undone.
 
 ### 16.7 Uploaded textures
 
@@ -721,9 +734,22 @@ Undo compares link strings (`src/history.ts`), so every undo step must be in the
 ### 16.11 Loading and performance
 
 - Upload code (`FBXLoader`, `EXRLoader`, `HDRLoader`, `GLTFExporter`, `EXRExporter`, `fflate`) loads only when you first upload, or when the link or library needs it. It adds nothing to first load. `fflate` comes with three.js, so there is no new dependency.
-- First load stays as measured in 15.12. Measure `dist/assets` before and after v3. The JavaScript loaded at start may grow by no more than 10 KB.
+- First load stays as measured in 15.12. Measure `dist/assets` before and after v3. The JavaScript loaded at start may grow by no more than 50 KB. It was raised from 10 KB on 19 Nov 2026 after milestone 2 used 10,188 bytes, and to 50 KB the same day after Task 8 reached 27,048 bytes. About 12.6 KB of that is code that links three.js between the start-up chunk and the upload chunk, not v3 features.
 - Uploads come from IndexedDB, not the network, so they don't count toward the 15 MB budget. The loader waits for the uploads the link uses, as it waits for the room's textures.
 - The 60 and 30 fps targets apply with 10 placed models. Checked: the orchid has 263,960 triangles. GTAO still turns off first under 30 fps.
+
+Measured on 21 Nov 2026, on the `v3-uploads` branch at commit 98ec516:
+
+- Start-up JavaScript (`VITE_ASSET_SET=fixture npx vite build`, the entry script and the chunks `index.html` preloads): 916,121 bytes, measured on 21 Nov 2026 at the end of the build. Before v3 it was 877,165 bytes, so v3 adds 38,956 bytes. The limit is 928,365 bytes (877,165 plus 50 KB).
+- Stored sizes of the example uploads (`bytes` in the store: the files and the thumbnail), uploaded through the Upload button in headless Chromium:
+
+| Upload | Kind | Stored | Upload took |
+| --- | --- | --- | --- |
+| `Poliigon_StoneQuartzite_8060.zip` | Texture | 3,570,742 bytes (3.6 MB) | 94 s |
+| `PlantOrchid001.zip` | Model, 42.8 cm tall | 11,316,128 bytes (11.3 MB) | 151 s |
+| `HdrSkySunset007.zip` | HDRI | 2,657,218 bytes (2.7 MB) | 36 s |
+
+- HDRI decode time: on 20 Nov 2026, before the horizon fill, the sunset HDRI (8192 × 4096 EXR) took 16.4 s from zip to stored sky in headless Chromium. Most of the time is the decode in the Worker (9.3 s of one 11.4 s run). The 36 s above was on a busy machine. Times on this machine ranged from 11 s to 114 s across runs, depending on load.
 
 ### 16.12 Safety
 
@@ -764,6 +790,6 @@ Manual: the four example zips in Chrome, Edge, Safari and Firefox on desktop; on
 
 | Question | Owner |
 | --- | --- |
-| Can phones decode an 8K EXR, or should phones get a lower HDRI limit? Check on one phone in milestone 4. | Ahmad |
+| Can phones decode an 8K EXR, or should phones get a lower HDRI limit? Check on one phone in milestone 4. Not checked yet (21 Nov 2026): waiting on Ahmad's check on a phone. | Ahmad |
 | Is 100 × 100 cm the right starting size for uploaded textures? | Ahmad |
-| Do 10 orchids (about 2.6 million triangles) hold 30 fps on the Windows laptop? If not, lower the cap or the triangle limit. Check in milestone 5. | Ahmad |
+| Do 10 orchids (about 2.6 million triangles) hold 30 fps on the Windows laptop? If not, lower the cap or the triangle limit. Check in milestone 5. Not checked yet (21 Nov 2026): waiting on Ahmad's check on the laptop. | Ahmad |

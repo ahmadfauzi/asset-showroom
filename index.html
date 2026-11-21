@@ -63,7 +63,13 @@
           <img alt="" width="56" height="56" />
           <div>
             <div class="name"></div>
-            <div class="meta"><span class="category"></span> · <span class="size"></span></div>
+            <div class="meta"><span class="category"></span><span class="size"></span></div>
+            <div class="dims" hidden>
+              <label for="card-width">Width (cm)</label>
+              <label for="card-height">Height (cm)</label>
+              <input id="card-width" type="number" min="10" max="1000" step="1" />
+              <input id="card-height" type="number" min="10" max="1000" step="1" />
+            </div>
             <a target="_blank" rel="noopener noreferrer">View asset</a>
           </div>
         </section>
@@ -80,6 +86,8 @@
         <span class="sep" aria-hidden="true"></span>
         <button type="button" data-action="save" title="Save a picture of the room">Save picture</button>
         <button type="button" data-action="copy" title="Copy a link to this room">Copy link</button>
+        <button type="button" data-action="upload" title="Upload a .zip with a texture, model or HDRI">Upload</button>
+        <input id="upload-input" type="file" accept=".zip" hidden />
         <span class="sep" aria-hidden="true"></span>
         <button type="button" data-action="help" title="Help (?)" aria-keyshortcuts="?">Help</button>
       </nav>
@@ -87,6 +95,8 @@
         <div class="time">
           <div class="clock">12:00</div>
           <input type="range" min="6" max="22" step="0.25" aria-label="Time of day" />
+          <p class="note" hidden>The HDRI sets the light.</p>
+          <button id="time-of-day" type="button" hidden>Time of day</button>
         </div>
         <div class="presets"></div>
         <button id="snow" type="button" aria-pressed="false" hidden>Snow</button>
@@ -100,6 +110,8 @@
       <p>There are four rooms: Living room, Bedroom, Bathroom and Garden. Use the room buttons to switch. Each room keeps its own textures, time of day and undo history while this page is open.</p>
       <h3>Apply a texture</h3>
       <p>Pick a surface in the list on the left, or click it in the room. Then click a texture in the tray at the bottom. You can also drag a texture straight onto a surface.</p>
+      <h3>Upload your own</h3>
+      <p>Upload a .zip with a texture, a model or an HDRI from the toolbar, or drop it on the page. Uploads stay in this browser only. Safari can clear them after 7 days without a visit. Textures fit any surface. Drag a model into the room, then drag it to move it. Select it to turn or remove it, or use the arrow keys, Q, E and Delete. HDRIs work as the Garden sky.</p>
       <h3>Change the light</h3>
       <p>Use the presets or the slider to change the time of day. The lamps come on after sunset. On a small screen, the slider is in the tray.</p>
       <h3>Make it snow</h3>
@@ -107,13 +119,16 @@
       <h3>Move around</h3>
       <p>Drag to turn the room and scroll to zoom.</p>
       <h3>Share the room</h3>
-      <p>Copy link puts this room in the link, with its textures, time of day and snow. Anyone who opens it sees the same room.</p>
+      <p>Copy link puts this room in the link, with its textures, time of day and snow. Anyone who opens it sees the same room. Uploads only show in this browser.</p>
       <h3>Keys</h3>
       <table>
         <tr><td><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
         <tr><td><kbd>Shift</kbd> + <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td><td>Redo</td></tr>
         <tr><td><kbd>R</kbd></td><td>Reset the view</td></tr>
         <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Move the time back or forward one hour</td></tr>
+        <tr><td>Arrow keys</td><td>Move the selected model</td></tr>
+        <tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Turn the selected model</td></tr>
+        <tr><td><kbd>Delete</kbd></td><td>Remove the selected model</td></tr>
         <tr><td><kbd>/</kbd></td><td>Hide or show the interface</td></tr>
         <tr><td><kbd>?</kbd></td><td>Open or close this help</td></tr>
         <tr><td><kbd>Esc</kbd></td><td>Close this help, clear the selected surface</td></tr>
@@ -129,7 +144,13 @@
       </div>
       <div id="tabs" role="group" aria-label="Texture categories"></div>
       <div id="swatches"></div>
+      <div id="upload-swatches" hidden></div>
     </section>
+    <div id="model-bar" class="panel" role="group" aria-label="Selected model" hidden>
+      <button type="button" data-turn="-15" title="Turn left (Q)">Turn left</button>
+      <button type="button" data-turn="15" title="Turn right (E)">Turn right</button>
+      <button type="button" data-action="remove" title="Remove (Delete)">Remove</button>
+    </div>
     <div id="tooltip" hidden><div></div><div class="hint">Click to change</div></div>
     <div id="loader" role="status">Loading the room…</div>
     <script type="module" src="/src/main.ts"></script>
