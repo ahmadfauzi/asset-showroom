@@ -740,7 +740,7 @@ Undo compares link strings (`src/history.ts`), so every undo step must be in the
 
 Measured on 21 Nov 2026, on the `v3-uploads` branch at commit 98ec516:
 
-- Start-up JavaScript (`VITE_ASSET_SET=fixture npx vite build`, the entry script and the chunks `index.html` preloads): 915,516 bytes. Before v3 it was 877,165 bytes, so v3 adds 38,351 bytes. The limit is 928,365 bytes (877,165 plus 50 KB).
+- Start-up JavaScript (`VITE_ASSET_SET=fixture npx vite build`, the entry script and the chunks `index.html` preloads): 916,121 bytes, measured on 21 Nov 2026 at the end of the build. Before v3 it was 877,165 bytes, so v3 adds 38,956 bytes. The limit is 928,365 bytes (877,165 plus 50 KB).
 - Stored sizes of the example uploads (`bytes` in the store: the files and the thumbnail), uploaded through the Upload button in headless Chromium:
 
 | Upload | Kind | Stored | Upload took |
